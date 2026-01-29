@@ -1,0 +1,65 @@
+menu "Cold Storage Configuration"
+
+    choice CONNECTION_TYPE
+        prompt "Network Connection Type"
+        default CONNECTION_TYPE_WIFI
+        help
+            Select the uplink connection method.
+
+        config CONNECTION_TYPE_WIFI
+            bool "WiFi"
+        config CONNECTION_TYPE_GSM
+            bool "GSM (Simulated/Placeholder)"
+    endchoice
+
+    if CONNECTION_TYPE_WIFI
+        config WIFI_SSID
+            string "WiFi SSID"
+            default "morsed"
+
+        config WIFI_PASSWORD
+            string "WiFi Password"
+            default "01521475412"
+    endif
+
+    if CONNECTION_TYPE_GSM
+        config GSM_UART_NUM
+            int "GSM UART Port Number"
+            default 1
+        config GSM_TX_PIN
+            int "GSM TX GPIO"
+            default 4
+        config GSM_RX_PIN
+            int "GSM RX GPIO"
+            default 5
+    endif
+
+    config ENABLE_MQTT
+        bool "Enable MQTT Reporting"
+        default y
+
+    if ENABLE_MQTT
+        config MQTT_BROKER_URL
+            string "MQTT Broker URL"
+            default "mqtt://broker.hivemq.com"
+        config MQTT_TOPIC
+            string "MQTT Topic"
+            default "cold_storage/sensors"
+    endif
+
+    menu "Sensor GPIO Configuration"
+        config DHT22_GPIO
+            int "DHT22 Data Pin"
+            default 18
+        config DS18B20_GPIO
+            int "DS18B20 Data Pin"
+            default 19
+
+        config DS18B20_FALLBACK_TEMP
+            int "Fallback Temperature if Disconnected"
+            default -127
+            help
+                Temperature value to use when DS18B20 is not connected.
+    endmenu
+
+endmenu
