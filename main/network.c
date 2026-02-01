@@ -67,6 +67,7 @@ void network_init(void)
     // This would involve esp_modem setup, UART config, and PPP netif creation.
     ESP_LOGI(TAG, "GSM Init started on UART %d (TX:%d RX:%d)",
              CONFIG_GSM_UART_NUM, CONFIG_GSM_TX_PIN, CONFIG_GSM_RX_PIN);
+             CONFIG_GSM_UART_PORT_NUM, CONFIG_GSM_UART_TX_PIN, CONFIG_GSM_UART_RX_PIN);
     // Assume connected for simulation if GSM is selected
     is_connected = true;
 #endif

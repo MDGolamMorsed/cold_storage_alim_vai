@@ -26,7 +26,7 @@ extern "C"
      * @param cmd The AT command string (e.g., "AT+CPIN?").
      * @return esp_err_t ESP_OK if command sent, ESP_FAIL otherwise.
      */
-    esp_err_t gsm_module_send_at_cmd(const char *cmd);
+    // esp_err_t gsm_module_send_at_cmd(const char *cmd);
 
     /**
      * @brief Send an SMS message.

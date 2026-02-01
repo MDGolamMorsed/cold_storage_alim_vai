@@ -27,19 +27,37 @@ void app_main(void)
     gsm_module_init();
 
     sensor_readings_t readings = {0};
-    gsm_module_call_emergency();
-        // 3. Main Loop
-        while (1)
+    float temp_threshold = 30.0f; // Default High Threshold
+    float hum_threshold = 80.0f;  // Default High Threshold
+
+    // 3. Main Loop
+    while (1)
     {
+        // Check for incoming SMS/Calls and update thresholds
+        gsm_module_process_data(&temp_threshold, &hum_threshold);
+
         // Read Sensors
         sensors_read_all(&readings);
 
         // Print to Serial
-        ESP_LOGI(TAG, "Readings -> DHT Temp: %.2f C, DHT Hum: %.2f %%, DS Temp: %.2f C",
-                 readings.dht_temp, readings.dht_humidity, readings.ds_temp);
+        ESP_LOGI(TAG, "Readings -> Temp: %.2f C (Thresh: %.2f), Hum: %.2f %% (Thresh: %.2f)",
+                 readings.dht_temp, temp_threshold, readings.dht_humidity, hum_threshold);
 
         // Send to Network (if enabled and connected)
         network_send_data(&readings);
+
+        // Check Thresholds and Notify
+        if (readings.dht_temp > temp_threshold || readings.dht_humidity > hum_threshold)
+        {
+            ESP_LOGW(TAG, "Threshold Exceeded! Sending Notifications...");
+
+            char msg[64];
+            snprintf(msg, sizeof(msg), "ALERT: Temp %.2f C, Hum %.2f %%", readings.dht_temp, readings.dht_humidity);
+
+            gsm_module_send_sms("+8801521475412", msg);
+            gsm_module_mqtt_publish("alert/threshold", msg);
+            gsm_module_call_emergency();
+        }
 
         // Wait 5 seconds
         vTaskDelay(pdMS_TO_TICKS(5000));
