@@ -22,6 +22,9 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    // Initialize Config (Generate MQTT Topic with MAC)
+    app_config_init();
+
     // Initialize Modules
     sensors_init();
 
@@ -77,8 +80,6 @@ void app_main(void)
             last_mqtt_send_time = now;
         }
 
-
-
         // Check Thresholds and Notify
         if (readings.dht_temp > temp_threshold || readings.dht_humidity > hum_threshold)
         {
@@ -92,10 +93,10 @@ void app_main(void)
 #endif
 
 #ifdef CONFIG_CONNECTION_TYPE_WIFI
-            gsm_module_send_sms(msg);
+            network_send_data(&readings);
 #endif
         }
-
+        
         // Wait 5 seconds
         vTaskDelay(pdMS_TO_TICKS(SENSOR_READ_INTERVAL_MS));
     }

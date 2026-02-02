@@ -11,21 +11,19 @@
 #include "driver/gpio.h"
 #include "gsm_module.h"
 #include "sdkconfig.h"
+#include "app_config.h"
 
 #define TAG "SIM7670_MQTT"
 
 // Fallback definitions to allow runtime switching even if disabled in menuconfig
-#ifndef CONFIG_SIM7670_MQTT_BROKER_URL
-#define CONFIG_SIM7670_MQTT_BROKER_URL "mqtt://broker.hivemq.com"
+#ifndef CONFIG_MQTT_BROKER_URL
+#define CONFIG_MQTT_BROKER_URL "mqtt://broker.hivemq.com"
 #endif
-#ifndef CONFIG_SIM7670_MQTT_USERNAME
-#define CONFIG_SIM7670_MQTT_USERNAME ""
+#ifndef CONFIG_MQTT_USERNAME
+#define CONFIG_MQTT_USERNAME ""
 #endif
-#ifndef CONFIG_SIM7670_MQTT_PASSWORD
-#define CONFIG_SIM7670_MQTT_PASSWORD ""
-#endif
-#ifndef CONFIG_SIM7670_MQTT_TOPIC
-#define CONFIG_SIM7670_MQTT_TOPIC "test/topic"
+#ifndef CONFIG_MQTT_PASSWORD
+#define CONFIG_MQTT_PASSWORD ""
 #endif
 #ifndef CONFIG_TARGET_PHONE_NUMBER
 #define CONFIG_TARGET_PHONE_NUMBER "+8801521475412"
@@ -45,7 +43,7 @@ typedef enum
 static esp_mqtt_client_handle_t mqtt_client = NULL;
 static volatile bool s_ppp_connected = false;
 static esp_modem_dce_t *dce = NULL;
-#ifdef CONFIG_SIM7670_MQTT_ENABLE
+#ifdef CONFIG_ENABLE_MQTT
 static volatile app_mode_t s_current_mode = MODE_MQTT;
 #else
 static volatile app_mode_t s_current_mode = MODE_SMS;
@@ -60,9 +58,9 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT Connected to HiveMQ");
         // Subscribe to the topic
-        esp_mqtt_client_subscribe(mqtt_client, CONFIG_SIM7670_MQTT_TOPIC, 0);
+        esp_mqtt_client_subscribe(mqtt_client, mqtt_sub_topic, 0);
         // Publish a test message
-        esp_mqtt_client_publish(mqtt_client, CONFIG_SIM7670_MQTT_TOPIC, "Hello from SIM7670C via PPPoS", 0, 1, 0);
+        esp_mqtt_client_publish(mqtt_client, mqtt_pub_topic, "Hello from SIM7670C via PPPoS", 0, 1, 0);
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT Disconnected");
@@ -107,11 +105,11 @@ static void on_ip_event(void *arg, esp_event_base_t event_base, int32_t event_id
 
         // Initialize MQTT only after we have an IP address
         esp_mqtt_client_config_t mqtt_cfg = {
-            .broker.address.uri = CONFIG_SIM7670_MQTT_BROKER_URL,
+            .broker.address.uri = CONFIG_MQTT_BROKER_URL,
             .credentials =
                 {
-                    .username = CONFIG_SIM7670_MQTT_USERNAME,
-                    .authentication.password = CONFIG_SIM7670_MQTT_PASSWORD,
+                    .username = CONFIG_MQTT_USERNAME,
+                    .authentication.password = CONFIG_MQTT_PASSWORD,
                 },
         };
 
@@ -157,6 +155,7 @@ static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const 
 }
 
 // --- SMS Parsing Function ---
+#if defined(CONFIG_CONNECTION_TYPE_GSM) && CONFIG_SIM7670_SMS_ENABLE
 static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text)
 {
     int dht_h, dht_l, temp_h, temp_l;
@@ -200,9 +199,11 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text)
         ESP_LOGI(TAG, "Received SMS (Raw): %s", sms_text);
     }
 }
+#endif
 
 esp_err_t gsm_module_init()
 {
+#ifdef CONFIG_CONNECTION_TYPE_GSM
     // 1. Initialize NVS and Netif
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
@@ -284,6 +285,9 @@ esp_err_t gsm_module_init()
     esp_modem_at(dce, "ATE0", NULL, 1000);
 
     return 1;
+#else
+    return ESP_OK;
+#endif
     // IMPORTANT: For SMS receiving to work, the modem must be configured for text mode
     // and to notify of new messages. This is typically done with:
     // AT+CMGF=1  (Set SMS to text mode)
@@ -293,6 +297,7 @@ esp_err_t gsm_module_init()
 
 void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
 {
+#ifdef CONFIG_CONNECTION_TYPE_GSM
     
     // if (s_current_mode == MODE_MQTT)
     // {
@@ -424,10 +429,12 @@ void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
         vTaskDelay(pdMS_TO_TICKS(2000)); // Prevent busy-looping
 #endif
     }
+#endif
 }
 
 esp_err_t gsm_module_call_emergency(void)
 {
+#ifdef CONFIG_CONNECTION_TYPE_GSM
     if (dce == NULL)
     {
         ESP_LOGE(TAG, "Modem not initialized");
@@ -473,14 +480,31 @@ esp_err_t gsm_module_call_emergency(void)
         ESP_LOGE(TAG, "Emergency call failed. Response: %s", response);
     }
     return err;
+#else
+    return ESP_OK;
+#endif
 }
 
 esp_err_t gsm_module_mqtt_publish(const char *payload)
 {
-    return 0;
+#ifdef CONFIG_CONNECTION_TYPE_GSM
+    if (s_ppp_connected && mqtt_client) {
+        int msg_id = esp_mqtt_client_publish(mqtt_client, mqtt_pub_topic, payload, 0, 1, 0);
+        ESP_LOGI(TAG, "GSM MQTT Sent: %s, ID: %d", payload, msg_id);
+        return ESP_OK;
+    }
+    ESP_LOGW(TAG, "Cannot send GSM MQTT: Not connected");
+    return ESP_FAIL;
+#else
+    return ESP_OK;
+#endif
 }
 
 esp_err_t gsm_module_send_sms(const char *message)
 {
+#ifdef CONFIG_CONNECTION_TYPE_GSM
     return send_sms(dce, CONFIG_TARGET_PHONE_NUMBER, message);
+#else
+    return ESP_OK;
+#endif
 }
