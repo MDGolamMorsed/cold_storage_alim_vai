@@ -33,7 +33,7 @@ void app_main(void)
 // Initialize GSM Module
 #ifdef CONFIG_CONNECTION_TYPE_GSM
     gsm_module_init();
-    gsm_module_send_sms("C_S_start");
+    // gsm_module_send_sms("C_S_start");
     vTaskDelay(pdMS_TO_TICKS(5000));
 
     ret = gsm_module_call_emergency();
@@ -50,6 +50,8 @@ void app_main(void)
     // variable for Sensors reading
     sensor_readings_t readings = {0};
 
+    uint32_t last_mqtt_send_time = 0;
+
     // 3. Main Loop
     while (1)
     {
@@ -60,15 +62,22 @@ void app_main(void)
         ESP_LOGI(TAG, "Readings -> Temp: %.2f C (Thresh: %.2f), Hum: %.2f %% (Thresh: %.2f)",
                  readings.dht_temp, temp_threshold, readings.dht_humidity, hum_threshold);
 
+        // Send Data at defined intervals
+        uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+        if ((now - last_mqtt_send_time) >= mqtt_send_interval_ms)
+        {
 #ifdef CONFIG_CONNECTION_TYPE_WIFI
-        // Send to wifi Network (if enabled and connected)
-        network_send_data(&readings);
+            // Send to wifi Network (if enabled and connected)
+            network_send_data(&readings);
 #endif
-
 #ifdef CONFIG_CONNECTION_TYPE_GSM
-        // Check for incoming SMS/Calls and update thresholds
-        // gsm_module_process_data(&temp_threshold, &hum_threshold);
+            // Check for incoming SMS/Calls and update thresholds
+            // gsm_module_process_data(&temp_threshold, &hum_threshold);
 #endif
+            last_mqtt_send_time = now;
+        }
+
+
 
         // Check Thresholds and Notify
         if (readings.dht_temp > temp_threshold || readings.dht_humidity > hum_threshold)
@@ -88,6 +97,6 @@ void app_main(void)
         }
 
         // Wait 5 seconds
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(SENSOR_READ_INTERVAL_MS));
     }
 }

@@ -293,6 +293,7 @@ esp_err_t gsm_module_init()
 
 void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
 {
+    
     // if (s_current_mode == MODE_MQTT)
     // {
     //     ESP_LOGI(TAG, "Entering MQTT Mode...");
@@ -369,8 +370,8 @@ void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
         }
 
         // Clear any old messages that may have arrived during MQTT mode
-        ESP_LOGI(TAG, "Clearing SMS inbox before polling...");
-        esp_modem_at(dce, "AT+CMGD=1,4", NULL, 5000);
+        // ESP_LOGI(TAG, "Clearing SMS inbox before polling...");
+        // esp_modem_at(dce, "AT+CMGD=1,4", NULL, 5000);
 
         char *sms_buffer = (char *)malloc(4096); // Increase buffer size for large SMS lists
         if (sms_buffer)
