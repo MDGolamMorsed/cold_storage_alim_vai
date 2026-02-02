@@ -36,6 +36,17 @@ menu "Cold Storage Configuration"
                 help
                     GPIO pin on ESP32 connected to the modem's TX pin.
 
+            config SIM7670_PWR_PIN
+                int "Modem PWR Pin"
+                default 21
+                help
+                    GPIO pin on ESP32 connected to the modem's PWR pin.
+            config SIM7670_RST_PIN
+                int "Modem RST Pin"
+                default 20
+                help
+                    GPIO pin on ESP32 connected to the modem's RST pin.
+
             config SIM7670_DTR_PIN
                 int "Modem DTR Pin"
                 default 45

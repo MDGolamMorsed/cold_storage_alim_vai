@@ -9,6 +9,7 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 #include "driver/gpio.h"
+#include "gsm_module.h"
 #include "sdkconfig.h"
 
 #define TAG "SIM7670_MQTT"
@@ -39,6 +40,7 @@ typedef enum
 // Default mode based on config, but can be switched at runtime
 static esp_mqtt_client_handle_t mqtt_client = NULL;
 static volatile bool s_ppp_connected = false;
+static esp_modem_dce_t *dce = NULL;
 #ifdef CONFIG_SIM7670_MQTT_ENABLE
 static volatile app_mode_t s_current_mode = MODE_MQTT;
 #else
@@ -195,7 +197,7 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text)
     }
 }
 
-void gsm_module_init(void)
+esp_err_t gsm_module_init()
 {
     // 1. Initialize NVS and Netif
     ESP_ERROR_CHECK(nvs_flash_init());
@@ -224,24 +226,33 @@ void gsm_module_init(void)
 
     // 6. Initialize the Modem Device
     // We use ESP_MODEM_DCE_SIM7600 as it is compatible with SIM7670C for PPPoS
-    esp_modem_dce_t *dce = esp_modem_new_dev(ESP_MODEM_DCE_SIM7600, &dte_config, &dce_config, esp_netif);
+    dce = esp_modem_new_dev(ESP_MODEM_DCE_SIM7600, &dte_config, &dce_config, esp_netif);
 
     if (!dce)
     {
         ESP_LOGE(TAG, "Failed to create modem device");
-        return;
+        return 0;
     }
 
     esp_modem_set_mode(dce, ESP_MODEM_MODE_COMMAND);
     // esp_modem_destroy(dce);
 
     // Pulse the Power Key to turn on the modem
-    // gpio_set_direction(4, GPIO_MODE_OUTPUT);
-    // gpio_set_level(4, 0);
-    // vTaskDelay(pdMS_TO_TICKS(1000));
-    // gpio_set_level(4, 1);
+    gpio_set_direction(CONFIG_SIM7670_PWR_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(CONFIG_SIM7670_PWR_PIN, 1);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    gpio_set_level(CONFIG_SIM7670_PWR_PIN, 0);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    gpio_set_level(CONFIG_SIM7670_PWR_PIN, 1);
+
+    gpio_set_direction(CONFIG_SIM7670_RST_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(CONFIG_SIM7670_RST_PIN, 1);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    gpio_set_level(CONFIG_SIM7670_RST_PIN, 0);
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    gpio_set_level(CONFIG_SIM7670_RST_PIN, 1);
     ESP_LOGI(TAG, "Waiting for modem to boot...");
-    vTaskDelay(pdMS_TO_TICKS(1000)); // Wait for boot
+    vTaskDelay(pdMS_TO_TICKS(10000)); // Wait for boot
 
     // Check if modem is responding to AT commands
     ESP_LOGI(TAG, "Checking modem response...");
@@ -262,9 +273,9 @@ void gsm_module_init(void)
     if (!modem_ready)
     {
         ESP_LOGE(TAG, "Modem failed to respond. Aborting.");
-        return;
+        return 0;
     }
-
+    return 1;
     // IMPORTANT: For SMS receiving to work, the modem must be configured for text mode
     // and to notify of new messages. This is typically done with:
     // AT+CMGF=1  (Set SMS to text mode)
@@ -272,51 +283,51 @@ void gsm_module_init(void)
     // These commands should be sent to the modem once (e.g., using a serial tool).
 }
 
-void gsm_module_process_data()
+void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
 {
-    if (s_current_mode == MODE_MQTT)
-    {
-        ESP_LOGI(TAG, "Entering MQTT Mode...");
+    // if (s_current_mode == MODE_MQTT)
+    // {
+    //     ESP_LOGI(TAG, "Entering MQTT Mode...");
 
-        // Enter Data Mode (PPPoS)
-        esp_err_t err = esp_modem_set_mode(dce, ESP_MODEM_MODE_DATA);
-        if (err != ESP_OK)
-        {
-            ESP_LOGE(TAG, "Failed to set data mode: %s", esp_err_to_name(err));
-            vTaskDelay(pdMS_TO_TICKS(5000));
-            continue;
-        }
+    //     // Enter Data Mode (PPPoS)
+    //     esp_err_t err = esp_modem_set_mode(dce, ESP_MODEM_MODE_DATA);
+    //     if (err != ESP_OK)
+    //     {
+    //         ESP_LOGE(TAG, "Failed to set data mode: %s", esp_err_to_name(err));
+    //         vTaskDelay(pdMS_TO_TICKS(5000));
+    //         return;
+    //     }
 
-        // Wait loop: Stay in MQTT mode until flag changes
-        while (s_current_mode == MODE_MQTT)
-        {
-            vTaskDelay(pdMS_TO_TICKS(100));
-        }
+    //     // Wait loop: Stay in MQTT mode until flag changes
+    //     while (s_current_mode == MODE_MQTT)
+    //     {
+    //         vTaskDelay(pdMS_TO_TICKS(100));
+    //     }
 
-        // Cleanup before switching to SMS
-        ESP_LOGI(TAG, "Stopping MQTT to switch modes...");
-        if (mqtt_client)
-        {
-            esp_mqtt_client_stop(mqtt_client);
-            esp_mqtt_client_destroy(mqtt_client);
-            mqtt_client = NULL;
-        }
+    //     // Cleanup before switching to SMS
+    //     ESP_LOGI(TAG, "Stopping MQTT to switch modes...");
+    //     if (mqtt_client)
+    //     {
+    //         esp_mqtt_client_stop(mqtt_client);
+    //         esp_mqtt_client_destroy(mqtt_client);
+    //         mqtt_client = NULL;
+    //     }
 
-        // Force Command Mode (this will drop PPP and trigger LOST_IP)
-        esp_modem_set_mode(dce, ESP_MODEM_MODE_COMMAND);
-        // vTaskDelay(pdMS_TO_TICKS(5000)); // Removed hard delay, relying on event flag
-    }
-    else
+    //     // Force Command Mode (this will drop PPP and trigger LOST_IP)
+    //     esp_modem_set_mode(dce, ESP_MODEM_MODE_COMMAND);
+    //     // vTaskDelay(pdMS_TO_TICKS(5000)); // Removed hard delay, relying on event flag
+    // }
+    // else
     { // s_current_mode == MODE_SMS
 #if CONFIG_SIM7670_SMS_ENABLE
         ESP_LOGI(TAG, "Entering SMS Mode...");
 
         // Wait for PPP to fully disconnect if it was active
-        while (s_ppp_connected)
-        {
-            ESP_LOGI(TAG, "Waiting for PPP disconnection...");
-            vTaskDelay(pdMS_TO_TICKS(100)); // Check more frequently
-        }
+        // while (s_ppp_connected)
+        // {
+        //     ESP_LOGI(TAG, "Waiting for PPP disconnection...");
+        //     vTaskDelay(pdMS_TO_TICKS(100)); // Check more frequently
+        // }
 
         // Give the modem a moment to settle after dropping the IP
         vTaskDelay(pdMS_TO_TICKS(200)); // Reduced stabilization time
@@ -404,4 +415,22 @@ void gsm_module_process_data()
         vTaskDelay(pdMS_TO_TICKS(2000)); // Prevent busy-looping
 #endif
     }
+}
+
+esp_err_t gsm_module_call_emergency(void)
+{
+    char cmd[64];
+    snprintf(cmd, sizeof(cmd), "ATD%s;", CONFIG_GSM_EMERGENCY_NUMBER);
+    ESP_LOGI(TAG, "Calling emergency number: %s", CONFIG_GSM_EMERGENCY_NUMBER);
+    return 0;//gsm_module_send_at_cmd(cmd);
+}
+
+esp_err_t gsm_module_mqtt_publish(const char *payload)
+{
+    return 0;
+}
+
+esp_err_t gsm_module_send_sms(const char *message)
+{
+    return send_sms(dce, CONFIG_TARGET_PHONE_NUMBER, message);
 }

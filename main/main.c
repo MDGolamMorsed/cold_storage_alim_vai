@@ -21,11 +21,24 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    // 2. Initialize Modules
+    // Initialize Modules
     sensors_init();
-    network_init();
-    gsm_module_init();
 
+// Initialize wifi Module
+#ifdef CONFIG_CONNECTION_TYPE_WIFI
+    network_init();
+#endif
+
+// Initialize GSM Module
+#ifdef CONFIG_CONNECTION_TYPE_GSM
+    gsm_module_init();
+    gsm_module_send_sms("msg");
+    gsm_module_call_emergency();
+    gsm_module_process_data(&temp_threshold, &hum_threshold);
+
+#endif
+
+    // Sensors threshold
     sensor_readings_t readings = {0};
     float temp_threshold = 30.0f; // Default High Threshold
     float hum_threshold = 80.0f;  // Default High Threshold
@@ -33,9 +46,6 @@ void app_main(void)
     // 3. Main Loop
     while (1)
     {
-        // Check for incoming SMS/Calls and update thresholds
-        gsm_module_process_data(&temp_threshold, &hum_threshold);
-
         // Read Sensors
         sensors_read_all(&readings);
 
@@ -43,8 +53,15 @@ void app_main(void)
         ESP_LOGI(TAG, "Readings -> Temp: %.2f C (Thresh: %.2f), Hum: %.2f %% (Thresh: %.2f)",
                  readings.dht_temp, temp_threshold, readings.dht_humidity, hum_threshold);
 
-        // Send to Network (if enabled and connected)
+#ifdef CONFIG_CONNECTION_TYPE_WIFI
+        // Send to wifi Network (if enabled and connected)
         network_send_data(&readings);
+#endif
+
+#ifdef CONFIG_CONNECTION_TYPE_GSM
+        // Check for incoming SMS/Calls and update thresholds
+        gsm_module_process_data(&temp_threshold, &hum_threshold);
+#endif
 
         // Check Thresholds and Notify
         if (readings.dht_temp > temp_threshold || readings.dht_humidity > hum_threshold)
@@ -54,9 +71,13 @@ void app_main(void)
             char msg[64];
             snprintf(msg, sizeof(msg), "ALERT: Temp %.2f C, Hum %.2f %%", readings.dht_temp, readings.dht_humidity);
 
-            gsm_module_send_sms("+8801521475412", msg);
+#ifdef CONFIG_CONNECTION_TYPE_GSM
             gsm_module_mqtt_publish("alert/threshold", msg);
-            gsm_module_call_emergency();
+#endif
+
+#ifdef CONFIG_CONNECTION_TYPE_WIFI
+            gsm_module_send_sms(msg);
+#endif
         }
 
         // Wait 5 seconds

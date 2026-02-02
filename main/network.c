@@ -6,7 +6,7 @@
 #include "sdkconfig.h"
 #include <stdio.h>
 
-static const char *TAG = "NETWORK";
+static const char *TAG = "WIFI_NETWORK";
 static esp_mqtt_client_handle_t mqtt_client = NULL;
 static bool is_connected = false;
 
@@ -62,17 +62,7 @@ void network_init(void)
     ESP_LOGI(TAG, "WiFi Init complete. SSID: %s", CONFIG_WIFI_SSID);
 #endif
 
-#ifdef CONFIG_CONNECTION_TYPE_GSM
-    // Placeholder for GSM initialization (PPPoS)
-    // This would involve esp_modem setup, UART config, and PPP netif creation.
-    ESP_LOGI(TAG, "GSM Init started on UART %d (TX:%d RX:%d)",
-             CONFIG_GSM_UART_NUM, CONFIG_GSM_TX_PIN, CONFIG_GSM_RX_PIN);
-             CONFIG_GSM_UART_PORT_NUM, CONFIG_GSM_UART_TX_PIN, CONFIG_GSM_UART_RX_PIN);
-    // Assume connected for simulation if GSM is selected
-    is_connected = true;
-#endif
-
-#ifdef CONFIG_ENABLE_MQTT
+#if defined(CONFIG_CONNECTION_TYPE_WIFI) && defined(CONFIG_ENABLE_MQTT) 
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = CONFIG_MQTT_BROKER_URL,
     };
@@ -85,7 +75,8 @@ void network_init(void)
 
 void network_send_data(const sensor_readings_t *readings)
 {
-#ifdef CONFIG_ENABLE_MQTT
+#if defined(CONFIG_CONNECTION_TYPE_WIFI) && defined(CONFIG_ENABLE_MQTT) 
+
     if (!mqtt_client || !is_connected)
     {
         ESP_LOGW(TAG, "Cannot send MQTT: Not connected");

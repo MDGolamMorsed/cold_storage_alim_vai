@@ -18,7 +18,7 @@ extern "C"
      *
      * @return esp_err_t ESP_OK on success, ESP_FAIL otherwise.
      */
-    esp_err_t gsm_module_init(void);
+    esp_err_t gsm_module_init();
 
     /**
      * @brief Send an AT command to the GSM module and print the reply.
@@ -35,7 +35,7 @@ extern "C"
      * @param message The message content.
      * @return esp_err_t ESP_OK on success.
      */
-    esp_err_t gsm_module_send_sms(const char *phone_number, const char *message);
+    esp_err_t gsm_module_send_sms(const char *message);
 
     /**
      * @brief Publish a message via MQTT (AT command wrapper).
@@ -44,7 +44,7 @@ extern "C"
      * @param payload Message payload.
      * @return esp_err_t ESP_OK on success.
      */
-    esp_err_t gsm_module_mqtt_publish(const char *topic, const char *payload);
+    esp_err_t gsm_module_mqtt_publish(const char *payload);
 
     /**
      * @brief Initiate a voice call to the configured emergency number.
