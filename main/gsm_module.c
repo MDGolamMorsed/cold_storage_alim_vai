@@ -31,6 +31,10 @@
 #define CONFIG_TARGET_PHONE_NUMBER "+8801521475412"
 #endif
 
+#ifndef CONFIG_GSM_EMERGENCY_NUMBER
+#define CONFIG_GSM_EMERGENCY_NUMBER CONFIG_TARGET_PHONE_NUMBER
+#endif
+
 typedef enum
 {
     MODE_SMS,
@@ -275,6 +279,10 @@ esp_err_t gsm_module_init()
         ESP_LOGE(TAG, "Modem failed to respond. Aborting.");
         return 0;
     }
+
+    // Disable command echo to prevent parsing errors
+    esp_modem_at(dce, "ATE0", NULL, 1000);
+
     return 1;
     // IMPORTANT: For SMS receiving to work, the modem must be configured for text mode
     // and to notify of new messages. This is typically done with:
@@ -419,10 +427,51 @@ void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
 
 esp_err_t gsm_module_call_emergency(void)
 {
+    if (dce == NULL)
+    {
+        ESP_LOGE(TAG, "Modem not initialized");
+        return ESP_FAIL;
+    }
+
+    // Ensure Echo is disabled
+    esp_modem_at(dce, "ATE0", NULL, 1000);
+
+    // Check for network registration before calling
+    char response[128];
+    int retries = 20;
+    bool registered = false;
+    ESP_LOGI(TAG, "Waiting for network registration...");
+    while (retries-- > 0)
+    {
+        memset(response, 0, sizeof(response));
+        if (esp_modem_at(dce, "AT+CREG?", response, 2000) == ESP_OK)
+        {
+            if (strstr(response, ",1") || strstr(response, ",5"))
+            {
+                registered = true;
+                ESP_LOGI(TAG, "Network Registered: %s", response);
+                break;
+            }
+        }
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+    if (!registered)
+    {
+        ESP_LOGW(TAG, "Network not registered. Call may fail.");
+    }
+
     char cmd[64];
     snprintf(cmd, sizeof(cmd), "ATD%s;", CONFIG_GSM_EMERGENCY_NUMBER);
     ESP_LOGI(TAG, "Calling emergency number: %s", CONFIG_GSM_EMERGENCY_NUMBER);
-    return 0;//gsm_module_send_at_cmd(cmd);
+
+    // Increase timeout to 10s and capture output for debugging
+    memset(response, 0, sizeof(response));
+    esp_err_t err = esp_modem_at(dce, cmd, response, 10000);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Emergency call failed. Response: %s", response);
+    }
+    return err;
 }
 
 esp_err_t gsm_module_mqtt_publish(const char *payload)

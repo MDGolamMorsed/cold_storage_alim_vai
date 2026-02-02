@@ -7,6 +7,7 @@
 #include "sensors.h"
 #include "network.h"
 #include "gsm_module.h"
+#include "app_config.h"
 
 static const char *TAG = "MAIN";
 
@@ -32,16 +33,22 @@ void app_main(void)
 // Initialize GSM Module
 #ifdef CONFIG_CONNECTION_TYPE_GSM
     gsm_module_init();
-    gsm_module_send_sms("msg");
-    gsm_module_call_emergency();
-    gsm_module_process_data(&temp_threshold, &hum_threshold);
+    gsm_module_send_sms("C_S_start");
+    vTaskDelay(pdMS_TO_TICKS(5000));
 
+    ret = gsm_module_call_emergency();
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Emergency call failed: %s", esp_err_to_name(ret));
+    }
+    else
+    {
+        ESP_LOGI(TAG, "Emergency call command sent successfully");
+    }
 #endif
 
-    // Sensors threshold
+    // variable for Sensors reading
     sensor_readings_t readings = {0};
-    float temp_threshold = 30.0f; // Default High Threshold
-    float hum_threshold = 80.0f;  // Default High Threshold
 
     // 3. Main Loop
     while (1)
@@ -60,7 +67,7 @@ void app_main(void)
 
 #ifdef CONFIG_CONNECTION_TYPE_GSM
         // Check for incoming SMS/Calls and update thresholds
-        gsm_module_process_data(&temp_threshold, &hum_threshold);
+        // gsm_module_process_data(&temp_threshold, &hum_threshold);
 #endif
 
         // Check Thresholds and Notify
@@ -72,7 +79,7 @@ void app_main(void)
             snprintf(msg, sizeof(msg), "ALERT: Temp %.2f C, Hum %.2f %%", readings.dht_temp, readings.dht_humidity);
 
 #ifdef CONFIG_CONNECTION_TYPE_GSM
-            gsm_module_mqtt_publish("alert/threshold", msg);
+            gsm_module_mqtt_publish(msg);
 #endif
 
 #ifdef CONFIG_CONNECTION_TYPE_WIFI
