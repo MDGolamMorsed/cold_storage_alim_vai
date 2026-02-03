@@ -2,6 +2,7 @@
 #include "esp_mac.h"
 #include "sdkconfig.h"
 #include <stdio.h>
+#include "esp_log.h"
 
 float temp_threshold = 30.0f; // Default High Threshold
 float hum_threshold = 80.0f;  // Default High Threshold
@@ -14,6 +15,11 @@ void app_config_init(void)
 {
     uint8_t mac[6] = {0};
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    // MACSTR expands to "%02x:%02x:%02x:%02x:%02x:%02x"
+    // MAC2STR(mac) expands to mac[0], mac[1], ..., mac[5]
+    // ESP_LOGI("WIFI", "MAC Address: " MACSTR, MAC2STR(mac));
+    ESP_LOGI("WIFI", "MAC Address: %02X:%02X:%02X:%02X:%02X:%02X", mac[0],
+             mac[1], mac[2], mac[3], mac[4], mac[5]);
 
 #ifndef CONFIG_MQTT_PUB_TOPIC
 #define CONFIG_MQTT_PUB_TOPIC "cold_storage/data"
