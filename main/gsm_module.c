@@ -35,6 +35,8 @@ static volatile app_mode_t s_current_mode = MODE_MQTT;
 static volatile app_mode_t s_current_mode = MODE_SMS;
 #endif
 
+#ifdef CONFIG_ENABLE_MQTT
+
 // --- MQTT Event Handler ---
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -80,6 +82,8 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     }
 }
 
+// #ifdef CONFIG_ENABLE_MQTT
+
 // --- Network Event Handler (PPPoS) ---
 static void on_ip_event(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
@@ -115,6 +119,7 @@ static void on_ip_event(void *arg, esp_event_base_t event_base, int32_t event_id
         }
     }
 }
+#endif
 
 // --- SMS Sending Function ---
 static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const char *message)
@@ -195,8 +200,10 @@ esp_err_t gsm_module_init()
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
+    #ifdef CONFIG_ENABLE_MQTT
     // 2. Register IP Event Handlers to detect when 4G connects
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &on_ip_event, NULL));
+    #endif
 
     // 3. Configure Modem DTE (UART Interface)
     esp_modem_dte_config_t dte_config = ESP_MODEM_DTE_DEFAULT_CONFIG();
@@ -494,6 +501,7 @@ esp_err_t gsm_module_mqtt_publish(const sensor_readings_t *readings)
 esp_err_t gsm_module_send_alert(const char *message)
 {
 #ifdef CONFIG_CONNECTION_TYPE_GSM
+#ifdef CONFIG_ENABLE_MQTT
     if (s_ppp_connected && mqtt_client)
     {
         int msg_id = esp_mqtt_client_publish(mqtt_client, mqtt_alert_topic, message, 0, 1, 0);
@@ -502,6 +510,11 @@ esp_err_t gsm_module_send_alert(const char *message)
     }
     ESP_LOGW(TAG, "Cannot send GSM MQTT Alert: Not connected");
     return ESP_FAIL;
+#elif defined(CONFIG_SMS_ENABLE)
+    return gsm_module_send_sms(message);
+#else
+    return ESP_FAIL;
+#endif
 #else
     return ESP_OK;
 #endif

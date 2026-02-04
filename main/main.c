@@ -77,6 +77,7 @@ void app_main(void)
     sensor_readings_t readings = {0};
 
     uint32_t last_mqtt_send_time = 0;
+    bool s_is_alert_state = false;
 
     // 3. Main Loop
     while (1)
@@ -98,18 +99,39 @@ void app_main(void)
 #endif
 #ifdef CONFIG_CONNECTION_TYPE_GSM
             // Check for incoming SMS/Calls and update thresholds
+#ifdef CONFIG_ENABLE_MQTT
             gsm_module_mqtt_publish(&readings);
+#endif
 #endif
             last_mqtt_send_time = now;
         }
 
         // Check Thresholds and Notify
-        if (readings.dht_temp > temp_threshold || readings.dht_humidity > hum_threshold)
+        bool is_threshold_exceeded = (readings.dht_temp > temp_threshold || readings.dht_humidity > hum_threshold);
+
+        if (is_threshold_exceeded && !s_is_alert_state)
         {
             ESP_LOGW(TAG, "Threshold Exceeded! Sending Notifications...");
+            s_is_alert_state = true;
 
             char msg[64];
             snprintf(msg, sizeof(msg), "ALERT: Temp %.2f C, Hum %.2f %%", readings.dht_temp, readings.dht_humidity);
+
+#ifdef CONFIG_CONNECTION_TYPE_GSM
+            gsm_module_send_alert(msg);
+#endif
+
+#ifdef CONFIG_CONNECTION_TYPE_WIFI
+            network_send_alert(msg);
+#endif
+        }
+        else if (!is_threshold_exceeded && s_is_alert_state)
+        {
+            ESP_LOGI(TAG, "Conditions returned to normal. Sending Notification...");
+            s_is_alert_state = false;
+
+            char msg[64];
+            snprintf(msg, sizeof(msg), "NORMAL: Temp %.2f C, Hum %.2f %%", readings.dht_temp, readings.dht_humidity);
 
 #ifdef CONFIG_CONNECTION_TYPE_GSM
             gsm_module_send_alert(msg);
