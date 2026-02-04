@@ -5,7 +5,7 @@
 #include "mqtt_client.h"
 #include "sdkconfig.h"
 #include <stdio.h>
-
+#include "app_config.h"
 
 static const char *TAG = "WIFI_NETWORK";
 static esp_mqtt_client_handle_t mqtt_client = NULL;
@@ -88,8 +88,8 @@ void network_send_data(const sensor_readings_t *readings) {
            readings->dht_temp, readings->dht_humidity, readings->ds_temp);
 
   int msg_id =
-      esp_mqtt_client_publish(mqtt_client, CONFIG_MQTT_TOPIC, payload, 0, 1, 0);
-  ESP_LOGI(TAG, "MQTT Sent: %s, ID: %d", payload, msg_id);
+      esp_mqtt_client_publish(mqtt_client, mqtt_pub_topic, payload, 0, 1, 0);
+  ESP_LOGI(TAG, "MQTT Sent: %s, ID: %d, topic: %s", payload, msg_id, mqtt_pub_topic);
 #else
   ESP_LOGI(TAG, "MQTT Disabled. Data not sent.");
 #endif

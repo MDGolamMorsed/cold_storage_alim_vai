@@ -1,12 +1,12 @@
 {
   "C_Cpp.intelliSenseEngine": "default",
-  "idf.espIdfPathWin": "E:/Espressif/frameworks/esp-idf-v5.5.1/",
-  "idf.pythonInstallPath": "E:\\Espressif\\tools\\idf-python\\3.11.2\\python.exe",
+  "idf.espIdfPathWin": "l:\\Espressif\\frameworks\\esp-idf-v5.5.1",
+  "idf.pythonInstallPath": "L:\\Espressif\\tools\\idf-python\\3.11.2\\python.exe",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
-  "idf.portWin": "COM15",
-  "idf.toolsPathWin": "E:\\Espressif",
+  "idf.portWin": "COM11",
+  "idf.toolsPathWin": "L:\\Espressif",
   "idf.customExtraVars": {
     "OPENOCD_SCRIPTS": "M:\\Espressif\\tools\\openocd-esp32\\v0.11.0-esp32-20221026/openocd-esp32/share/openocd/scripts",
     "IDF_CCACHE_ENABLE": "1",

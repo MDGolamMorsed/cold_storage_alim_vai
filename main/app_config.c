@@ -6,7 +6,7 @@
 
 float temp_threshold = 30.0f; // Default High Threshold
 float hum_threshold = 80.0f;  // Default High Threshold
-uint32_t mqtt_send_interval_ms = 60000; // Default 60 seconds
+uint32_t mqtt_send_interval_ms = 6000; // Default 60 seconds
 
 char mqtt_pub_topic[128] = {0};
 char mqtt_sub_topic[128] = {0};
