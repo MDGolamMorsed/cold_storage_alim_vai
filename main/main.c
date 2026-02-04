@@ -31,6 +31,17 @@ void app_main(void)
 // Initialize wifi Module
 #ifdef CONFIG_CONNECTION_TYPE_WIFI
     network_init();
+
+    int retry = 0;
+    while (!network_is_connected() && retry < 20)
+    {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        retry++;
+    }
+    if (network_is_connected())
+    {
+        network_send_mac();
+    }
 #endif
 
 // Initialize GSM Module
@@ -96,7 +107,7 @@ void app_main(void)
             network_send_data(&readings);
 #endif
         }
-        
+
         // Wait 5 seconds
         vTaskDelay(pdMS_TO_TICKS(SENSOR_READ_INTERVAL_MS));
     }

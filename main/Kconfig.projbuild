@@ -105,6 +105,9 @@ menu "Cold Storage Configuration"
         config MQTT_TOPIC
             string "MQTT Topic"
             default "cold_storage/sensors"
+        config MQTT_MAC_TOPIC
+            string "MQTT MAC Topic"
+            default "01521475412"
     endif
 
     menu "MQTT Configuration"

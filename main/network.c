@@ -12,26 +12,48 @@ static esp_mqtt_client_handle_t mqtt_client = NULL;
 static bool is_connected = false;
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data) {
-  if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+                               int32_t event_id, void *event_data)
+{
+  if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
+  {
     esp_wifi_connect();
-  } else if (event_base == WIFI_EVENT &&
-             event_id == WIFI_EVENT_STA_DISCONNECTED) {
+  }
+  else if (event_base == WIFI_EVENT &&
+           event_id == WIFI_EVENT_STA_DISCONNECTED)
+  {
     is_connected = false;
     esp_wifi_connect();
     ESP_LOGI(TAG, "Retrying to connect to the AP");
-  } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+  }
+  else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
+  {
     is_connected = true;
     ESP_LOGI(TAG, "WiFi Connected");
   }
 }
 
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
-                               int32_t event_id, void *event_data) {
+                               int32_t event_id, void *event_data)
+{
   ESP_LOGD(TAG, "MQTT Event dispatched: %d", (int)event_id);
+  esp_mqtt_event_handle_t event = event_data;
+
+  if (event_id == MQTT_EVENT_CONNECTED)
+  {
+    ESP_LOGI(TAG, "MQTT Connected");
+    esp_mqtt_client_subscribe(mqtt_client, mqtt_sub_topic, 0);
+    ESP_LOGI(TAG, "Subscribed to %s", mqtt_sub_topic);
+  }
+  else if (event_id == MQTT_EVENT_DATA)
+  {
+    ESP_LOGI(TAG, "MQTT_EVENT_DATA");
+    ESP_LOGI(TAG, "TOPIC=%.*s", event->topic_len, event->topic);
+    ESP_LOGI(TAG, "DATA=%.*s", event->data_len, event->data);
+  }
 }
 
-void network_init(void) {
+void network_init(void)
+{
   ESP_ERROR_CHECK(esp_netif_init());
   ESP_ERROR_CHECK(esp_event_loop_create_default());
 
@@ -74,10 +96,12 @@ void network_init(void) {
 #endif
 }
 
-void network_send_data(const sensor_readings_t *readings) {
+void network_send_data(const sensor_readings_t *readings)
+{
 #if defined(CONFIG_CONNECTION_TYPE_WIFI) && defined(CONFIG_ENABLE_MQTT)
 
-  if (!mqtt_client || !is_connected) {
+  if (!mqtt_client || !is_connected)
+  {
     ESP_LOGW(TAG, "Cannot send MQTT: Not connected");
     return;
   }
@@ -92,6 +116,25 @@ void network_send_data(const sensor_readings_t *readings) {
   ESP_LOGI(TAG, "MQTT Sent: %s, ID: %d, topic: %s", payload, msg_id, mqtt_pub_topic);
 #else
   ESP_LOGI(TAG, "MQTT Disabled. Data not sent.");
+#endif
+}
+
+void network_send_mac(void)
+{
+#if defined(CONFIG_CONNECTION_TYPE_WIFI) && defined(CONFIG_ENABLE_MQTT)
+  if (!mqtt_client || !is_connected)
+  {
+    ESP_LOGW(TAG, "Cannot send MAC: Not connected");
+    return;
+  }
+  uint8_t mac[6];
+  esp_wifi_get_mac(WIFI_IF_STA, mac);
+  char mac_str[18];
+  snprintf(mac_str, sizeof(mac_str), "%02X:%02X:%02X:%02X:%02X:%02X",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+
+  int msg_id = esp_mqtt_client_publish(mqtt_client, CONFIG_MQTT_MAC_TOPIC, mac_str, 0, 1, 0);
+  ESP_LOGI(TAG, "MAC Sent: %s, ID: %d, topic: %s", mac_str, msg_id, CONFIG_MQTT_MAC_TOPIC);
 #endif
 }
 

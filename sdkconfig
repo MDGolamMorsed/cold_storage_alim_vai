@@ -606,6 +606,7 @@ CONFIG_WIFI_PROV_POP="coldstorage123"
 CONFIG_ENABLE_MQTT=y
 CONFIG_MQTT_BROKER_URL="mqtt://broker.hivemq.com"
 CONFIG_MQTT_TOPIC="cold_storage/sensors"
+CONFIG_MQTT_MAC_TOPIC="01521475412"
 
 #
 # MQTT Configuration
