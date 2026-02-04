@@ -453,6 +453,10 @@ void gsm_module_process_data(float *temp_threshold, float *hum_threshold, const 
                     if (strstr(sms_buffer, "+CMGL:") || strstr(sms_buffer, "#mqtt#") || strstr(sms_buffer, "#dht:") || strstr(sms_buffer, "#status#"))
                     {
                         handle_sms_content(dce, sms_buffer, readings);
+
+                        // Wait for modem to stabilize after processing (sending SMS takes time)
+                        vTaskDelay(pdMS_TO_TICKS(2000));
+
                         // Delete all messages to prevent repeated processing
                         // We delete all messages to ensure the inbox is clean for the next command
                         ESP_LOGI(TAG, "Deleting processed SMS...");
