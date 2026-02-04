@@ -14,3 +14,8 @@ if at cmd use then also print at cmd reply
 #temp:GT,30.5# (Greater Than)
 #temp:LT,10.0# (Less Than)
 #temp:R,20.0,25.0# (Range)
+#hum:LT,30.0,79.90# 
+A085E3F08548/cold_storage/data
+A085E3F08548/cold_storage/data
+A085E3F08548/cold_storage/alert
+A085E3F08548/cold_storage/commands
