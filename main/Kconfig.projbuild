@@ -131,6 +131,10 @@ menu "Cold Storage Configuration"
             config MQTT_MAC_TOPIC
                 string "MQTT MAC Topic"
                 default "01521475412"
+
+            config MQTT_ALERT_TOPIC_BASE
+                string "MQTT Alert Topic Base"
+                default "cold_storage/alert"
             
         endmenu
     endif

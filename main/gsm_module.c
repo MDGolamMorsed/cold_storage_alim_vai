@@ -284,40 +284,39 @@ esp_err_t gsm_module_init()
 void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
 {
 #ifdef CONFIG_CONNECTION_TYPE_GSM
+    if (s_current_mode == MODE_MQTT)
+    {
+        ESP_LOGI(TAG, "Entering MQTT Mode...");
 
-    // if (s_current_mode == MODE_MQTT)
-    // {
-    //     ESP_LOGI(TAG, "Entering MQTT Mode...");
+        // Enter Data Mode (PPPoS)
+        esp_err_t err = esp_modem_set_mode(dce, ESP_MODEM_MODE_DATA);
+        if (err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Failed to set data mode: %s", esp_err_to_name(err));
+            vTaskDelay(pdMS_TO_TICKS(5000));
+            return;
+        }
 
-    //     // Enter Data Mode (PPPoS)
-    //     esp_err_t err = esp_modem_set_mode(dce, ESP_MODEM_MODE_DATA);
-    //     if (err != ESP_OK)
-    //     {
-    //         ESP_LOGE(TAG, "Failed to set data mode: %s", esp_err_to_name(err));
-    //         vTaskDelay(pdMS_TO_TICKS(5000));
-    //         return;
-    //     }
+        // Wait loop: Stay in MQTT mode until flag changes
+        while (s_current_mode == MODE_MQTT)
+        {
+            vTaskDelay(pdMS_TO_TICKS(100));
+        }
 
-    //     // Wait loop: Stay in MQTT mode until flag changes
-    //     while (s_current_mode == MODE_MQTT)
-    //     {
-    //         vTaskDelay(pdMS_TO_TICKS(100));
-    //     }
+        // Cleanup before switching to SMS
+        ESP_LOGI(TAG, "Stopping MQTT to switch modes...");
+        if (mqtt_client)
+        {
+            esp_mqtt_client_stop(mqtt_client);
+            esp_mqtt_client_destroy(mqtt_client);
+            mqtt_client = NULL;
+        }
 
-    //     // Cleanup before switching to SMS
-    //     ESP_LOGI(TAG, "Stopping MQTT to switch modes...");
-    //     if (mqtt_client)
-    //     {
-    //         esp_mqtt_client_stop(mqtt_client);
-    //         esp_mqtt_client_destroy(mqtt_client);
-    //         mqtt_client = NULL;
-    //     }
-
-    //     // Force Command Mode (this will drop PPP and trigger LOST_IP)
-    //     esp_modem_set_mode(dce, ESP_MODEM_MODE_COMMAND);
-    //     // vTaskDelay(pdMS_TO_TICKS(5000)); // Removed hard delay, relying on event flag
-    // }
-    // else
+        // Force Command Mode (this will drop PPP and trigger LOST_IP)
+        esp_modem_set_mode(dce, ESP_MODEM_MODE_COMMAND);
+        // vTaskDelay(pdMS_TO_TICKS(5000)); // Removed hard delay, relying on event flag
+    }
+    else
     { // s_current_mode == MODE_SMS
 #ifdef CONFIG_SMS_ENABLE
         ESP_LOGI(TAG, "Entering SMS Mode...");
@@ -486,6 +485,22 @@ esp_err_t gsm_module_mqtt_publish(const sensor_readings_t *readings)
         return ESP_OK;
     }
     ESP_LOGW(TAG, "Cannot send GSM MQTT: Not connected");
+    return ESP_FAIL;
+#else
+    return ESP_OK;
+#endif
+}
+
+esp_err_t gsm_module_send_alert(const char *message)
+{
+#ifdef CONFIG_CONNECTION_TYPE_GSM
+    if (s_ppp_connected && mqtt_client)
+    {
+        int msg_id = esp_mqtt_client_publish(mqtt_client, mqtt_alert_topic, message, 0, 1, 0);
+        ESP_LOGI(TAG, "GSM MQTT Alert Sent: %s, ID: %d", message, msg_id);
+        return ESP_OK;
+    }
+    ESP_LOGW(TAG, "Cannot send GSM MQTT Alert: Not connected");
     return ESP_FAIL;
 #else
     return ESP_OK;

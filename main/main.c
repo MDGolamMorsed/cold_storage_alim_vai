@@ -11,6 +11,16 @@
 
 static const char *TAG = "MAIN";
 
+#ifdef CONFIG_CONNECTION_TYPE_GSM
+void gsm_processing_task(void *pvParameters)
+{
+    while (1)
+    {
+        gsm_module_process_data(&temp_threshold, &hum_threshold);
+    }
+}
+#endif
+
 void app_main(void)
 {
     // 1. Initialize NVS (Required for WiFi)
@@ -59,6 +69,8 @@ void app_main(void)
     {
         ESP_LOGI(TAG, "Emergency call command sent successfully");
     }
+
+    xTaskCreate(gsm_processing_task, "gsm_task", 4096, NULL, 5, NULL);
 #endif
 
     // variable for Sensors reading
@@ -86,7 +98,6 @@ void app_main(void)
 #endif
 #ifdef CONFIG_CONNECTION_TYPE_GSM
             // Check for incoming SMS/Calls and update thresholds
-            // gsm_module_process_data(&temp_threshold, &hum_threshold);
             gsm_module_mqtt_publish(&readings);
 #endif
             last_mqtt_send_time = now;
@@ -101,11 +112,11 @@ void app_main(void)
             snprintf(msg, sizeof(msg), "ALERT: Temp %.2f C, Hum %.2f %%", readings.dht_temp, readings.dht_humidity);
 
 #ifdef CONFIG_CONNECTION_TYPE_GSM
-            // gsm_module_mqtt_publish(msg);
+            gsm_module_send_alert(msg);
 #endif
 
 #ifdef CONFIG_CONNECTION_TYPE_WIFI
-            network_send_data(msg);
+            network_send_alert(msg);
 #endif
         }
 

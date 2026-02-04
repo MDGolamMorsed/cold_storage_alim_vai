@@ -49,6 +49,14 @@ extern "C"
     esp_err_t gsm_module_mqtt_publish(const sensor_readings_t *payload);
 
     /**
+     * @brief Publish an alert message via MQTT.
+     *
+     * @param message Alert message string.
+     * @return esp_err_t ESP_OK on success.
+     */
+    esp_err_t gsm_module_send_alert(const char *message);
+
+    /**
      * @brief Initiate a voice call to the configured emergency number.
      *
      * @return esp_err_t ESP_OK on success.

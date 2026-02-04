@@ -124,6 +124,24 @@ void network_send_data(const sensor_readings_t *readings)
 #endif
 }
 
+void network_send_alert(const char *message)
+{
+#if defined(CONFIG_CONNECTION_TYPE_WIFI) && defined(CONFIG_ENABLE_MQTT)
+
+  if (!mqtt_client || !is_connected)
+  {
+    ESP_LOGW(TAG, "Cannot send MQTT Alert: Not connected");
+    return;
+  }
+
+  int msg_id =
+      esp_mqtt_client_publish(mqtt_client, mqtt_alert_topic, message, 0, 1, 0);
+  ESP_LOGI(TAG, "MQTT Alert Sent: %s, ID: %d, topic: %s", message, msg_id, mqtt_alert_topic);
+#else
+  ESP_LOGI(TAG, "MQTT Disabled. Alert not sent.");
+#endif
+}
+
 void network_send_mac(void)
 {
 #if defined(CONFIG_CONNECTION_TYPE_WIFI) && defined(CONFIG_ENABLE_MQTT)

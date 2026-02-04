@@ -617,23 +617,12 @@ CONFIG_SIM_NAME_GP=y
 # end of GSM module Configuration
 
 CONFIG_SIM7670_APN="gpinternet"
-CONFIG_ENABLE_MQTT=y
-
-#
-# MQTT Configuration
-#
-CONFIG_MQTT_BROKER_URL="mqtt://broker.hivemq.com"
-CONFIG_MQTT_USERNAME=""
-CONFIG_MQTT_PASSWORD=""
-CONFIG_MQTT_PUB_TOPIC_BASE="cold_storage/data"
-CONFIG_MQTT_SUB_TOPIC_BASE="cold_storage/commands"
-CONFIG_MQTT_MAC_TOPIC="01521475412"
-# end of MQTT Configuration
+# CONFIG_ENABLE_MQTT is not set
 
 #
 # SMS Configuration
 #
-# CONFIG_SMS_ENABLE is not set
+CONFIG_SMS_ENABLE=y
 CONFIG_TARGET_PHONE_NUMBER="+8801521475412"
 # end of SMS Configuration
 
