@@ -7,6 +7,8 @@
 
 #include "esp_err.h"
 #include <stdint.h>
+#include "sensors.h"
+
 
 #ifdef __cplusplus
 extern "C"
@@ -44,7 +46,7 @@ extern "C"
      * @param payload Message payload.
      * @return esp_err_t ESP_OK on success.
      */
-    esp_err_t gsm_module_mqtt_publish(const char *payload);
+    esp_err_t gsm_module_mqtt_publish(const sensor_readings_t *payload);
 
     /**
      * @brief Initiate a voice call to the configured emergency number.

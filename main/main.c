@@ -87,6 +87,7 @@ void app_main(void)
 #ifdef CONFIG_CONNECTION_TYPE_GSM
             // Check for incoming SMS/Calls and update thresholds
             // gsm_module_process_data(&temp_threshold, &hum_threshold);
+            gsm_module_mqtt_publish(&readings);
 #endif
             last_mqtt_send_time = now;
         }
@@ -100,11 +101,11 @@ void app_main(void)
             snprintf(msg, sizeof(msg), "ALERT: Temp %.2f C, Hum %.2f %%", readings.dht_temp, readings.dht_humidity);
 
 #ifdef CONFIG_CONNECTION_TYPE_GSM
-            gsm_module_mqtt_publish(msg);
+            // gsm_module_mqtt_publish(msg);
 #endif
 
 #ifdef CONFIG_CONNECTION_TYPE_WIFI
-            network_send_data(&readings);
+            network_send_data(msg);
 #endif
         }
 

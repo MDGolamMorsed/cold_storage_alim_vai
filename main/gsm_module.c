@@ -471,11 +471,16 @@ esp_err_t gsm_module_call_emergency(void)
 #endif
 }
 
-esp_err_t gsm_module_mqtt_publish(const char *payload)
+esp_err_t gsm_module_mqtt_publish(const sensor_readings_t *readings)
 {
 #ifdef CONFIG_CONNECTION_TYPE_GSM
     if (s_ppp_connected && mqtt_client)
     {
+        char payload[128];
+  snprintf(payload, sizeof(payload),
+           "{\"dht_temp\": %.2f, \"dht_hum\": %.2f, \"ds_temp\": %.2f}",
+           readings->dht_temp, readings->dht_humidity, readings->ds_temp);
+
         int msg_id = esp_mqtt_client_publish(mqtt_client, mqtt_pub_topic, payload, 0, 1, 0);
         ESP_LOGI(TAG, "GSM MQTT Sent: %s, ID: %d", payload, msg_id);
         return ESP_OK;
