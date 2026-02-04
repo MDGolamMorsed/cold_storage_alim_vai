@@ -455,7 +455,7 @@ void gsm_module_process_data(float *temp_threshold, float *hum_threshold, const 
                     }
                     // Check for +CMGL: OR specific commands directly.
                     // This handles cases where the header might be lost due to buffer overflow.
-                    if (strstr(sms_buffer, "+CMGL:") || strstr(sms_buffer, "#mqtt#") || strstr(sms_buffer, "#dht:") || strstr(sms_buffer, "#status#"))
+                    if (strstr(sms_buffer, "+CMGL:") || strstr(sms_buffer, "#mqtt#") || strstr(sms_buffer, "#dht:") || strstr(sms_buffer, "#status#") || strstr(sms_buffer, "#+"))
                     {
                         handle_sms_content(dce, sms_buffer, readings);
 
