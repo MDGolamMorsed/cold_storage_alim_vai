@@ -230,6 +230,15 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const
             temp_cfg->val1 = v1;
             snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: < %.1f", v1);
         }
+
+        // Save to NVS
+        nvs_handle_t my_handle;
+        if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK)
+        {
+            nvs_set_blob(my_handle, "temp_cfg", temp_cfg, sizeof(threshold_config_t));
+            nvs_commit(my_handle);
+            nvs_close(my_handle);
+        }
     }
 
     // --- Parse Humidity Thresholds ---
@@ -251,6 +260,15 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const
             hum_cfg->op = THRESH_LT;
             hum_cfg->val1 = v1;
             snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: < %.1f", v1);
+        }
+
+        // Save to NVS
+        nvs_handle_t my_handle;
+        if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK)
+        {
+            nvs_set_blob(my_handle, "hum_cfg", hum_cfg, sizeof(threshold_config_t));
+            nvs_commit(my_handle);
+            nvs_close(my_handle);
         }
     }
 
@@ -296,6 +314,21 @@ esp_err_t gsm_module_init()
         {
             ESP_LOGI(TAG, "Loaded target phone number from NVS: %s", target_phone_number);
         }
+
+        // Load Temp Config
+        size_t sz = sizeof(threshold_config_t);
+        if (nvs_get_blob(my_handle, "temp_cfg", &temp_thresh_cfg, &sz) == ESP_OK)
+        {
+            ESP_LOGI(TAG, "Loaded Temp Config from NVS");
+        }
+
+        // Load Hum Config
+        sz = sizeof(threshold_config_t);
+        if (nvs_get_blob(my_handle, "hum_cfg", &hum_thresh_cfg, &sz) == ESP_OK)
+        {
+            ESP_LOGI(TAG, "Loaded Hum Config from NVS");
+        }
+
         nvs_close(my_handle);
     }
 
