@@ -40,7 +40,6 @@ static volatile app_mode_t s_current_mode = MODE_MQTT;
 static volatile app_mode_t s_current_mode = MODE_SMS;
 #endif
 
-static char target_phone_number[32] = CONFIG_TARGET_PHONE_NUMBER;
 
 #ifdef CONFIG_ENABLE_MQTT
 
@@ -64,7 +63,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "Message Received on topic: %.*s", event->topic_len, event->topic);
         ESP_LOGI(TAG, "DATA=%.*s", event->data_len, event->data);
 
-        // Check for mode switch command #sms#
         if (event->data_len > 0)
         {
             char *payload = malloc(event->data_len + 1);
@@ -72,11 +70,112 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
             {
                 memcpy(payload, event->data, event->data_len);
                 payload[event->data_len] = '\0';
+
+                char reply_msg[128] = {0};
+                bool config_changed = false;
+
+                // Check for mode switch command #sms#
                 if (strstr(payload, "#sms#"))
                 {
                     ESP_LOGI(TAG, "Command received: Switching to SMS Mode");
                     s_current_mode = MODE_SMS;
                 }
+
+                // Check for phone number update command #+...#
+                char *phone_cmd_start = strstr(payload, "#+");
+                if (phone_cmd_start)
+                {
+                    char *phone_cmd_end = strchr(phone_cmd_start + 1, '#');
+                    if (phone_cmd_end)
+                    {
+                        size_t len = phone_cmd_end - (phone_cmd_start + 1);
+                        if (len < sizeof(target_phone_number) - 1 && len > 2)
+                        {
+                            memset(target_phone_number, 0, sizeof(target_phone_number));
+                            strncpy(target_phone_number, phone_cmd_start + 1, len);
+                            ESP_LOGI(TAG, "Target phone number updated to: %s", target_phone_number);
+
+                            // Save to NVS
+                            nvs_handle_t my_handle;
+                            if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK)
+                            {
+                                nvs_set_str(my_handle, "target_phone", target_phone_number);
+                                nvs_commit(my_handle);
+                                nvs_close(my_handle);
+                            }
+                            snprintf(reply_msg, sizeof(reply_msg), "Phone updated: %s", target_phone_number);
+                            config_changed = true;
+                        }
+                    }
+                }
+
+                // Parse Temp Config
+                char *temp_cmd = strstr(payload, "#temp:");
+                if (temp_cmd)
+                {
+                    float v1 = 0, v2 = 0;
+                    if (sscanf(temp_cmd, "#temp:R,%f,%f#", &v1, &v2) == 2) {
+                        temp_thresh_cfg.op = THRESH_RANGE_IN;
+                        temp_thresh_cfg.val1 = v1;
+                        temp_thresh_cfg.val2 = v2;
+                        snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: Range %.1f to %.1f", v1, v2);
+                    } else if (sscanf(temp_cmd, "#temp:GT,%f#", &v1) == 1) {
+                        temp_thresh_cfg.op = THRESH_GT;
+                        temp_thresh_cfg.val1 = v1;
+                        snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: > %.1f", v1);
+                    } else if (sscanf(temp_cmd, "#temp:LT,%f#", &v1) == 1) {
+                        temp_thresh_cfg.op = THRESH_LT;
+                        temp_thresh_cfg.val1 = v1;
+                        snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: < %.1f", v1);
+                    }
+
+                    // Save to NVS
+                    nvs_handle_t my_handle;
+                    if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK)
+                    {
+                        nvs_set_blob(my_handle, "temp_cfg", &temp_thresh_cfg, sizeof(threshold_config_t));
+                        nvs_commit(my_handle);
+                        nvs_close(my_handle);
+                    }
+                    config_changed = true;
+                }
+
+                // Parse Hum Config
+                char *hum_cmd = strstr(payload, "#hum:");
+                if (hum_cmd)
+                {
+                    float v1 = 0, v2 = 0;
+                    if (sscanf(hum_cmd, "#hum:R,%f,%f#", &v1, &v2) == 2) {
+                        hum_thresh_cfg.op = THRESH_RANGE_IN;
+                        hum_thresh_cfg.val1 = v1;
+                        hum_thresh_cfg.val2 = v2;
+                        snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: Range %.1f to %.1f", v1, v2);
+                    } else if (sscanf(hum_cmd, "#hum:GT,%f#", &v1) == 1) {
+                        hum_thresh_cfg.op = THRESH_GT;
+                        hum_thresh_cfg.val1 = v1;
+                        snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: > %.1f", v1);
+                    } else if (sscanf(hum_cmd, "#hum:LT,%f#", &v1) == 1) {
+                        hum_thresh_cfg.op = THRESH_LT;
+                        hum_thresh_cfg.val1 = v1;
+                        snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: < %.1f", v1);
+                    }
+
+                    // Save to NVS
+                    nvs_handle_t my_handle;
+                    if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK)
+                    {
+                        nvs_set_blob(my_handle, "hum_cfg", &hum_thresh_cfg, sizeof(threshold_config_t));
+                        nvs_commit(my_handle);
+                        nvs_close(my_handle);
+                    }
+                    config_changed = true;
+                }
+
+                if (config_changed && strlen(reply_msg) > 0)
+                {
+                    esp_mqtt_client_publish(mqtt_client, mqtt_pub_topic, reply_msg, 0, 1, 0);
+                }
+
                 free(payload);
             }
         }
@@ -305,32 +404,6 @@ esp_err_t gsm_module_init()
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    // Load target phone number from NVS
-    nvs_handle_t my_handle;
-    if (nvs_open("storage", NVS_READONLY, &my_handle) == ESP_OK)
-    {
-        size_t required_size = sizeof(target_phone_number);
-        if (nvs_get_str(my_handle, "target_phone", target_phone_number, &required_size) == ESP_OK)
-        {
-            ESP_LOGI(TAG, "Loaded target phone number from NVS: %s", target_phone_number);
-        }
-
-        // Load Temp Config
-        size_t sz = sizeof(threshold_config_t);
-        if (nvs_get_blob(my_handle, "temp_cfg", &temp_thresh_cfg, &sz) == ESP_OK)
-        {
-            ESP_LOGI(TAG, "Loaded Temp Config from NVS");
-        }
-
-        // Load Hum Config
-        sz = sizeof(threshold_config_t);
-        if (nvs_get_blob(my_handle, "hum_cfg", &hum_thresh_cfg, &sz) == ESP_OK)
-        {
-            ESP_LOGI(TAG, "Loaded Hum Config from NVS");
-        }
-
-        nvs_close(my_handle);
-    }
 
 #ifdef CONFIG_ENABLE_MQTT
     // 2. Register IP Event Handlers to detect when 4G connects

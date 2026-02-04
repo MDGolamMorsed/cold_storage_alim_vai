@@ -6,6 +6,8 @@
 #include "sdkconfig.h"
 #include <stdio.h>
 #include "app_config.h"
+#include "nvs_flash.h"
+#include "nvs.h"
 
 static const char *TAG = "WIFI_NETWORK";
 static esp_mqtt_client_handle_t mqtt_client = NULL;
@@ -49,6 +51,116 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
     ESP_LOGI(TAG, "MQTT_EVENT_DATA");
     ESP_LOGI(TAG, "TOPIC=%.*s", event->topic_len, event->topic);
     ESP_LOGI(TAG, "DATA=%.*s", event->data_len, event->data);
+
+    if (event->data_len > 0)
+    {
+        char *payload = malloc(event->data_len + 1);
+        if (payload)
+        {
+            memcpy(payload, event->data, event->data_len);
+            payload[event->data_len] = '\0';
+
+            char reply_msg[128] = {0};
+            bool config_changed = false;
+
+            // Check for phone number update command #+...#
+            char *phone_cmd_start = strstr(payload, "#+");
+            if (phone_cmd_start)
+            {
+                char *phone_cmd_end = strchr(phone_cmd_start + 1, '#');
+                if (phone_cmd_end)
+                {
+                    size_t len = phone_cmd_end - (phone_cmd_start + 1);
+                    if (len < sizeof(target_phone_number) - 1 && len > 2)
+                    {
+                        memset(target_phone_number, 0, sizeof(target_phone_number));
+                        strncpy(target_phone_number, phone_cmd_start + 1, len);
+                        ESP_LOGI(TAG, "Target phone number updated to: %s", target_phone_number);
+
+                        // Save to NVS
+                        nvs_handle_t my_handle;
+                        if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK)
+                        {
+                            nvs_set_str(my_handle, "target_phone", target_phone_number);
+                            nvs_commit(my_handle);
+                            nvs_close(my_handle);
+                        }
+                        snprintf(reply_msg, sizeof(reply_msg), "Phone updated: %s", target_phone_number);
+                        config_changed = true;
+                    }
+                }
+            }
+
+            // Parse Temp Config
+            char *temp_cmd = strstr(payload, "#temp:");
+            if (temp_cmd)
+            {
+                float v1 = 0, v2 = 0;
+                if (sscanf(temp_cmd, "#temp:R,%f,%f#", &v1, &v2) == 2) {
+                    temp_thresh_cfg.op = THRESH_RANGE_IN;
+                    temp_thresh_cfg.val1 = v1;
+                    temp_thresh_cfg.val2 = v2;
+                    snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: Range %.1f to %.1f", v1, v2);
+                } else if (sscanf(temp_cmd, "#temp:GT,%f#", &v1) == 1) {
+                    temp_thresh_cfg.op = THRESH_GT;
+                    temp_thresh_cfg.val1 = v1;
+                    snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: > %.1f", v1);
+                } else if (sscanf(temp_cmd, "#temp:LT,%f#", &v1) == 1) {
+                    temp_thresh_cfg.op = THRESH_LT;
+                    temp_thresh_cfg.val1 = v1;
+                    snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: < %.1f", v1);
+                }
+
+                // Save to NVS
+                nvs_handle_t my_handle;
+                if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK)
+                {
+                    nvs_set_blob(my_handle, "temp_cfg", &temp_thresh_cfg, sizeof(threshold_config_t));
+                    nvs_commit(my_handle);
+                    nvs_close(my_handle);
+                }
+                config_changed = true;
+            }
+
+            // Parse Hum Config
+            char *hum_cmd = strstr(payload, "#hum:");
+            if (hum_cmd)
+            {
+                float v1 = 0, v2 = 0;
+                if (sscanf(hum_cmd, "#hum:R,%f,%f#", &v1, &v2) == 2) {
+                    hum_thresh_cfg.op = THRESH_RANGE_IN;
+                    hum_thresh_cfg.val1 = v1;
+                    hum_thresh_cfg.val2 = v2;
+                    snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: Range %.1f to %.1f", v1, v2);
+                } else if (sscanf(hum_cmd, "#hum:GT,%f#", &v1) == 1) {
+                    hum_thresh_cfg.op = THRESH_GT;
+                    hum_thresh_cfg.val1 = v1;
+                    snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: > %.1f", v1);
+                } else if (sscanf(hum_cmd, "#hum:LT,%f#", &v1) == 1) {
+                    hum_thresh_cfg.op = THRESH_LT;
+                    hum_thresh_cfg.val1 = v1;
+                    snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: < %.1f", v1);
+                }
+
+                // Save to NVS
+                nvs_handle_t my_handle;
+                if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK)
+                {
+                    nvs_set_blob(my_handle, "hum_cfg", &hum_thresh_cfg, sizeof(threshold_config_t));
+                    nvs_commit(my_handle);
+                    nvs_close(my_handle);
+                }
+                config_changed = true;
+            }
+
+            if (config_changed && strlen(reply_msg) > 0)
+            {
+                esp_mqtt_client_publish(mqtt_client, mqtt_pub_topic, reply_msg, 0, 1, 0);
+            }
+
+            free(payload);
+        }
+    }
   }
 }
 

@@ -22,4 +22,5 @@ extern uint32_t mqtt_send_interval_ms;
 extern char mqtt_pub_topic[128];
 extern char mqtt_sub_topic[128];
 extern char mqtt_alert_topic[128];
+extern char target_phone_number[32];
 void app_config_init(void);
