@@ -11,3 +11,6 @@ if at cmd use then also print at cmd reply
 
 #status#
 #+8801521475412#
+#temp:GT,30.5# (Greater Than)
+#temp:LT,10.0# (Less Than)
+#temp:R,20.0,25.0# (Range)

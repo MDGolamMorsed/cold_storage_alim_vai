@@ -8,6 +8,7 @@
 #include "esp_err.h"
 #include <stdint.h>
 #include "sensors.h"
+#include "app_config.h"
 
 
 #ifdef __cplusplus
@@ -66,11 +67,11 @@ extern "C"
     /**
      * @brief Check for incoming data (SMS, MQTT, RING) and parse thresholds.
      *
-     * @param temp_threshold Pointer to the temperature threshold variable to update.
-     * @param hum_threshold Pointer to the humidity threshold variable to update.
+     * @param temp_cfg Pointer to the temperature threshold config to update.
+     * @param hum_cfg Pointer to the humidity threshold config to update.
      * @param readings Pointer to the latest sensor readings.
      */
-    void gsm_module_process_data(float *temp_threshold, float *hum_threshold, const sensor_readings_t *readings);
+    void gsm_module_process_data(threshold_config_t *temp_cfg, threshold_config_t *hum_cfg, const sensor_readings_t *readings);
 
 #ifdef __cplusplus
 }

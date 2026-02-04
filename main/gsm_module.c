@@ -154,12 +154,9 @@ static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const 
 
 // --- SMS Parsing Function ---
 #if defined(CONFIG_CONNECTION_TYPE_GSM) && defined(CONFIG_SMS_ENABLE)
-static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const sensor_readings_t *readings)
+static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const sensor_readings_t *readings, threshold_config_t *temp_cfg, threshold_config_t *hum_cfg)
 {
-    int dht_h, dht_l, temp_h, temp_l;
-    // Check for the specific format: #dht:H22,L20;temp:H23,L15;#
-    // We look for the start of the pattern
-    const char *pattern_start = strstr(sms_text, "#dht:");
+    char reply_msg[128] = {0};
 
     // Check for mode switch command #mqtt#
     if (strstr(sms_text, "#mqtt#"))
@@ -213,26 +210,65 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const
         }
     }
 
-    if (pattern_start)
+    // --- Parse Temperature Thresholds ---
+    // Formats: #temp:GT,30.0# or #temp:LT,10.0# or #temp:R,20.0,30.0#
+    char *temp_cmd = strstr(sms_text, "#temp:");
+    if (temp_cmd)
     {
-        if (sscanf(pattern_start, "#dht:H%d,L%d;temp:H%d,L%d;#", &dht_h, &dht_l, &temp_h, &temp_l) == 4)
-        {
-            ESP_LOGI(TAG, "SMS DECODE: dht sensor high threshold is %d and low threshold is %d. same as temp sensor (H%d, L%d)",
-                     dht_h, dht_l, temp_h, temp_l);
-
-            // Send a success response to the pre-configured phone number
-            if (strlen(target_phone_number) > 0)
-            {
-                send_sms(dce, target_phone_number, "Success: DHT & Temp thresholds received.");
-            }
-            else
-            {
-                ESP_LOGW(TAG, "Target phone number not configured in menuconfig. Cannot send success SMS.");
-            }
+        float v1 = 0, v2 = 0;
+        if (sscanf(temp_cmd, "#temp:R,%f,%f#", &v1, &v2) == 2) {
+            temp_cfg->op = THRESH_RANGE_IN;
+            temp_cfg->val1 = v1;
+            temp_cfg->val2 = v2;
+            snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: Range %.1f to %.1f", v1, v2);
+        } else if (sscanf(temp_cmd, "#temp:GT,%f#", &v1) == 1) {
+            temp_cfg->op = THRESH_GT;
+            temp_cfg->val1 = v1;
+            snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: > %.1f", v1);
+        } else if (sscanf(temp_cmd, "#temp:LT,%f#", &v1) == 1) {
+            temp_cfg->op = THRESH_LT;
+            temp_cfg->val1 = v1;
+            snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: < %.1f", v1);
         }
-        else
+    }
+
+    // --- Parse Humidity Thresholds ---
+    // Formats: #hum:GT,80.0# or #hum:LT,30.0# or #hum:R,40.0,60.0#
+    char *hum_cmd = strstr(sms_text, "#hum:");
+    if (hum_cmd)
+    {
+        float v1 = 0, v2 = 0;
+        if (sscanf(hum_cmd, "#hum:R,%f,%f#", &v1, &v2) == 2) {
+            hum_cfg->op = THRESH_RANGE_IN;
+            hum_cfg->val1 = v1;
+            hum_cfg->val2 = v2;
+            snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: Range %.1f to %.1f", v1, v2);
+        } else if (sscanf(hum_cmd, "#hum:GT,%f#", &v1) == 1) {
+            hum_cfg->op = THRESH_GT;
+            hum_cfg->val1 = v1;
+            snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: > %.1f", v1);
+        } else if (sscanf(hum_cmd, "#hum:LT,%f#", &v1) == 1) {
+            hum_cfg->op = THRESH_LT;
+            hum_cfg->val1 = v1;
+            snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: < %.1f", v1);
+        }
+    }
+
+    // Send Reply if configuration changed
+    if (strlen(reply_msg) > 0)
+    {
+        ESP_LOGI(TAG, "Sending Config Reply: %s", reply_msg);
+        if (strlen(target_phone_number) > 0)
         {
-            ESP_LOGW(TAG, "SMS matched prefix but failed to parse values: %s", pattern_start);
+            send_sms(dce, target_phone_number, reply_msg);
+        }
+    }
+    else if (!strstr(sms_text, "#status#") && !strstr(sms_text, "#mqtt#") && !strstr(sms_text, "#+"))
+    {
+        // Fallback for legacy format if needed, or just log
+        if (strstr(sms_text, "#dht:")) {
+             // Legacy parsing removed/replaced by new flexible format
+             ESP_LOGW(TAG, "Received legacy #dht format, please use #temp:GT,30# format.");
         }
     }
     else
@@ -356,7 +392,7 @@ esp_err_t gsm_module_init()
     // These commands should be sent to the modem once (e.g., using a serial tool).
 }
 
-void gsm_module_process_data(float *temp_threshold, float *hum_threshold, const sensor_readings_t *readings)
+void gsm_module_process_data(threshold_config_t *temp_cfg, threshold_config_t *hum_cfg, const sensor_readings_t *readings)
 {
 #ifdef CONFIG_CONNECTION_TYPE_GSM
     if (s_current_mode == MODE_MQTT)
@@ -455,9 +491,9 @@ void gsm_module_process_data(float *temp_threshold, float *hum_threshold, const 
                     }
                     // Check for +CMGL: OR specific commands directly.
                     // This handles cases where the header might be lost due to buffer overflow.
-                    if (strstr(sms_buffer, "+CMGL:") || strstr(sms_buffer, "#mqtt#") || strstr(sms_buffer, "#dht:") || strstr(sms_buffer, "#status#") || strstr(sms_buffer, "#+"))
+                    if (strstr(sms_buffer, "+CMGL:") || strstr(sms_buffer, "#mqtt#") || strstr(sms_buffer, "#dht:") || strstr(sms_buffer, "#status#") || strstr(sms_buffer, "#+") || strstr(sms_buffer, "#temp:") || strstr(sms_buffer, "#hum:"))
                     {
-                        handle_sms_content(dce, sms_buffer, readings);
+                        handle_sms_content(dce, sms_buffer, readings, temp_cfg, hum_cfg);
 
                         // Delete all messages to prevent repeated processing
                         // We delete all messages to ensure the inbox is clean for the next command

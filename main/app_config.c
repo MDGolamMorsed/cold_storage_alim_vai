@@ -4,8 +4,8 @@
 #include <stdio.h>
 #include "esp_log.h"
 
-float temp_threshold = 30.0f; // Default High Threshold
-float hum_threshold = 70.0f;  // Default High Threshold
+threshold_config_t temp_thresh_cfg = { .op = THRESH_GT, .val1 = 30.0f, .val2 = 0.0f };
+threshold_config_t hum_thresh_cfg = { .op = THRESH_GT, .val1 = 70.0f, .val2 = 0.0f };
 uint32_t mqtt_send_interval_ms = 6000; // Default 60 seconds
 
 char mqtt_pub_topic[128] = {0};
