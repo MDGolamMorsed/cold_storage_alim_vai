@@ -97,69 +97,58 @@ menu "Cold Storage Configuration"
     config ENABLE_MQTT
         bool "Enable MQTT Reporting"
         default y
+        help
+            Enable MQTT reporting for the selected connection type (WiFi or GSM).
 
     if ENABLE_MQTT
-        config MQTT_BROKER_URL
-            string "MQTT Broker URL"
-            default "mqtt://broker.hivemq.com"
-        config MQTT_TOPIC
-            string "MQTT Topic"
-            default "cold_storage/sensors"
-        config MQTT_MAC_TOPIC
-            string "MQTT MAC Topic"
-            default "01521475412"
-    endif
-
-    menu "MQTT Configuration"
-        config SIM7670_MQTT_ENABLE
-            bool "Enable MQTT Client"
-            default y
-            help
-                Enable the MQTT client functionality.
-
-        if SIM7670_MQTT_ENABLE
-            config SIM7670_MQTT_BROKER_URL
+        menu "MQTT Configuration"
+            config MQTT_BROKER_URL
                 string "MQTT Broker URL"
                 default "mqtt://broker.hivemq.com"
                 help
                     URL of the MQTT broker (e.g., mqtt://broker.hivemq.com).
 
-            config SIM7670_MQTT_TOPIC
-                string "MQTT Topic"
-                default "esp32/response"
-                help
-                    Topic to subscribe and publish to.
-
-            config SIM7670_MQTT_USERNAME
+            config MQTT_USERNAME
                 string "MQTT Username"
                 default ""
                 help
                     Username for MQTT broker authentication (optional).
 
-            config SIM7670_MQTT_PASSWORD
+            config MQTT_PASSWORD
                 string "MQTT Password"
                 default ""
                 help
                     Password for MQTT broker authentication (optional).
-        endif # SIM7670_MQTT_ENABLE
-    endmenu # MQTT Configuration
+
+            config MQTT_PUB_TOPIC_BASE
+                string "MQTT Publish Topic Base"
+                default "cold_storage/data"
+
+            config MQTT_SUB_TOPIC_BASE
+                string "MQTT Subscribe Topic Base"
+                default "cold_storage/commands"
+
+            config MQTT_MAC_TOPIC
+                string "MQTT MAC Topic"
+                default "01521475412"
+            
+        endmenu
+    endif
 
 
     if CONNECTION_TYPE_GSM
         menu "SMS Configuration"
-            config SIM7670_SMS_ENABLE
+            config SMS_ENABLE
                 bool "Enable SMS Feature"
                 default n
                 help
                     Placeholder to enable SMS functionality in the future.
 
-            if SIM7670_SMS_ENABLE
-                config SIM7670_SMS_PHONE_NO
-                    string "Target Phone Number for SMS"
-                    default ""
-                    help
-                        The phone number to send SMS messages to.
-            endif # SIM7670_SMS_ENABLE
+            config TARGET_PHONE_NUMBER
+                string "Target Phone Number"
+                default "+8801521475412"
+                help
+                    The phone number to send SMS messages to or use as default emergency number.
         endmenu # SMS Configuration
     endif
 

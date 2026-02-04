@@ -87,6 +87,11 @@ void network_init(void)
 #if defined(CONFIG_CONNECTION_TYPE_WIFI) && defined(CONFIG_ENABLE_MQTT)
   esp_mqtt_client_config_t mqtt_cfg = {
       .broker.address.uri = CONFIG_MQTT_BROKER_URL,
+      .credentials =
+          {
+              .username = CONFIG_MQTT_USERNAME,
+              .authentication.password = CONFIG_MQTT_PASSWORD,
+          },
   };
   mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
   esp_mqtt_client_register_event(mqtt_client, ESP_EVENT_ANY_ID,

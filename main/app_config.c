@@ -21,16 +21,11 @@ void app_config_init(void)
     ESP_LOGI("WIFI", "MAC Address: %02X:%02X:%02X:%02X:%02X:%02X", mac[0],
              mac[1], mac[2], mac[3], mac[4], mac[5]);
 
-#ifndef CONFIG_MQTT_PUB_TOPIC
-#define CONFIG_MQTT_PUB_TOPIC "cold_storage/data"
-#endif
-#ifndef CONFIG_MQTT_SUB_TOPIC
-#define CONFIG_MQTT_SUB_TOPIC "cold_storage/commands"
-#endif
-
-    // Format: MAC_ADDRESS/TOPIC
+#ifdef CONFIG_ENABLE_MQTT
+    // Format: MAC_ADDRESS/TOPIC_BASE
     snprintf(mqtt_pub_topic, sizeof(mqtt_pub_topic), "%02X%02X%02X%02X%02X%02X/%s",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], CONFIG_MQTT_PUB_TOPIC);
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], CONFIG_MQTT_PUB_TOPIC_BASE);
     snprintf(mqtt_sub_topic, sizeof(mqtt_sub_topic), "%02X%02X%02X%02X%02X%02X/%s",
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], CONFIG_MQTT_SUB_TOPIC);
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5], CONFIG_MQTT_SUB_TOPIC_BASE);
+#endif
 }

@@ -15,20 +15,6 @@
 
 #define TAG "SIM7670_MQTT"
 
-// Fallback definitions to allow runtime switching even if disabled in menuconfig
-#ifndef CONFIG_MQTT_BROKER_URL
-#define CONFIG_MQTT_BROKER_URL "mqtt://broker.hivemq.com"
-#endif
-#ifndef CONFIG_MQTT_USERNAME
-#define CONFIG_MQTT_USERNAME ""
-#endif
-#ifndef CONFIG_MQTT_PASSWORD
-#define CONFIG_MQTT_PASSWORD ""
-#endif
-#ifndef CONFIG_TARGET_PHONE_NUMBER
-#define CONFIG_TARGET_PHONE_NUMBER "+8801521475412"
-#endif
-
 #ifndef CONFIG_GSM_EMERGENCY_NUMBER
 #define CONFIG_GSM_EMERGENCY_NUMBER CONFIG_TARGET_PHONE_NUMBER
 #endif
@@ -155,7 +141,7 @@ static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const 
 }
 
 // --- SMS Parsing Function ---
-#if defined(CONFIG_CONNECTION_TYPE_GSM) && CONFIG_SIM7670_SMS_ENABLE
+#if defined(CONFIG_CONNECTION_TYPE_GSM) && defined(CONFIG_SMS_ENABLE)
 static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text)
 {
     int dht_h, dht_l, temp_h, temp_l;
@@ -298,7 +284,7 @@ esp_err_t gsm_module_init()
 void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
 {
 #ifdef CONFIG_CONNECTION_TYPE_GSM
-    
+
     // if (s_current_mode == MODE_MQTT)
     // {
     //     ESP_LOGI(TAG, "Entering MQTT Mode...");
@@ -333,7 +319,7 @@ void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
     // }
     // else
     { // s_current_mode == MODE_SMS
-#if CONFIG_SIM7670_SMS_ENABLE
+#ifdef CONFIG_SMS_ENABLE
         ESP_LOGI(TAG, "Entering SMS Mode...");
 
         // Wait for PPP to fully disconnect if it was active
@@ -488,7 +474,8 @@ esp_err_t gsm_module_call_emergency(void)
 esp_err_t gsm_module_mqtt_publish(const char *payload)
 {
 #ifdef CONFIG_CONNECTION_TYPE_GSM
-    if (s_ppp_connected && mqtt_client) {
+    if (s_ppp_connected && mqtt_client)
+    {
         int msg_id = esp_mqtt_client_publish(mqtt_client, mqtt_pub_topic, payload, 0, 1, 0);
         ESP_LOGI(TAG, "GSM MQTT Sent: %s, ID: %d", payload, msg_id);
         return ESP_OK;
