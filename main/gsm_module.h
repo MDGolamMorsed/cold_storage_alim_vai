@@ -68,8 +68,9 @@ extern "C"
      *
      * @param temp_threshold Pointer to the temperature threshold variable to update.
      * @param hum_threshold Pointer to the humidity threshold variable to update.
+     * @param readings Pointer to the latest sensor readings.
      */
-    void gsm_module_process_data(float *temp_threshold, float *hum_threshold);
+    void gsm_module_process_data(float *temp_threshold, float *hum_threshold, const sensor_readings_t *readings);
 
 #ifdef __cplusplus
 }

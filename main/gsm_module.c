@@ -8,12 +8,17 @@
 #include "esp_modem_api.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "driver/gpio.h"
 #include "gsm_module.h"
 #include "sdkconfig.h"
 #include "app_config.h"
 
 #define TAG "SIM7670_MQTT"
+
+#ifndef CONFIG_TARGET_PHONE_NUMBER
+#define CONFIG_TARGET_PHONE_NUMBER ""
+#endif
 
 #ifndef CONFIG_GSM_EMERGENCY_NUMBER
 #define CONFIG_GSM_EMERGENCY_NUMBER CONFIG_TARGET_PHONE_NUMBER
@@ -34,6 +39,8 @@ static volatile app_mode_t s_current_mode = MODE_MQTT;
 #else
 static volatile app_mode_t s_current_mode = MODE_SMS;
 #endif
+
+static char target_phone_number[32] = CONFIG_TARGET_PHONE_NUMBER;
 
 #ifdef CONFIG_ENABLE_MQTT
 
@@ -147,7 +154,7 @@ static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const 
 
 // --- SMS Parsing Function ---
 #if defined(CONFIG_CONNECTION_TYPE_GSM) && defined(CONFIG_SMS_ENABLE)
-static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text)
+static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const sensor_readings_t *readings)
 {
     int dht_h, dht_l, temp_h, temp_l;
     // Check for the specific format: #dht:H22,L20;temp:H23,L15;#
@@ -162,6 +169,50 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text)
         return; // Command handled, no need to parse further
     }
 
+    // Check for status command #status#
+    if (strstr(sms_text, "#status#"))
+    {
+        ESP_LOGI(TAG, "Command received: Sending Status Report");
+        char status_msg[128];
+        snprintf(status_msg, sizeof(status_msg), "Status: Temp: %.2fC, Hum: %.2f%%, DS: %.2fC",
+                 readings->dht_temp, readings->dht_humidity, readings->ds_temp);
+
+        if (strlen(target_phone_number) > 0)
+        {
+            send_sms(dce, target_phone_number, status_msg);
+        }
+        return;
+    }
+
+    // Check for phone number update command #+...#
+    char *phone_cmd_start = strstr(sms_text, "#+");
+    if (phone_cmd_start)
+    {
+        char *phone_cmd_end = strchr(phone_cmd_start + 1, '#');
+        if (phone_cmd_end)
+        {
+            size_t len = phone_cmd_end - (phone_cmd_start + 1);
+            if (len < sizeof(target_phone_number) - 1 && len > 2)
+            {
+                memset(target_phone_number, 0, sizeof(target_phone_number));
+                strncpy(target_phone_number, phone_cmd_start + 1, len);
+                ESP_LOGI(TAG, "Target phone number updated to: %s", target_phone_number);
+
+                // Save to NVS so it persists after reboot
+                nvs_handle_t my_handle;
+                if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK)
+                {
+                    nvs_set_str(my_handle, "target_phone", target_phone_number);
+                    nvs_commit(my_handle);
+                    nvs_close(my_handle);
+                }
+
+                send_sms(dce, target_phone_number, "Success: Target phone number updated.");
+                return;
+            }
+        }
+    }
+
     if (pattern_start)
     {
         if (sscanf(pattern_start, "#dht:H%d,L%d;temp:H%d,L%d;#", &dht_h, &dht_l, &temp_h, &temp_l) == 4)
@@ -170,9 +221,9 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text)
                      dht_h, dht_l, temp_h, temp_l);
 
             // Send a success response to the pre-configured phone number
-            if (strlen(CONFIG_TARGET_PHONE_NUMBER) > 0)
+            if (strlen(target_phone_number) > 0)
             {
-                send_sms(dce, CONFIG_TARGET_PHONE_NUMBER, "Success: DHT & Temp thresholds received.");
+                send_sms(dce, target_phone_number, "Success: DHT & Temp thresholds received.");
             }
             else
             {
@@ -199,6 +250,18 @@ esp_err_t gsm_module_init()
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    // Load target phone number from NVS
+    nvs_handle_t my_handle;
+    if (nvs_open("storage", NVS_READONLY, &my_handle) == ESP_OK)
+    {
+        size_t required_size = sizeof(target_phone_number);
+        if (nvs_get_str(my_handle, "target_phone", target_phone_number, &required_size) == ESP_OK)
+        {
+            ESP_LOGI(TAG, "Loaded target phone number from NVS: %s", target_phone_number);
+        }
+        nvs_close(my_handle);
+    }
 
     #ifdef CONFIG_ENABLE_MQTT
     // 2. Register IP Event Handlers to detect when 4G connects
@@ -288,7 +351,7 @@ esp_err_t gsm_module_init()
     // These commands should be sent to the modem once (e.g., using a serial tool).
 }
 
-void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
+void gsm_module_process_data(float *temp_threshold, float *hum_threshold, const sensor_readings_t *readings)
 {
 #ifdef CONFIG_CONNECTION_TYPE_GSM
     if (s_current_mode == MODE_MQTT)
@@ -387,9 +450,9 @@ void gsm_module_process_data(float *temp_threshold, float *hum_threshold)
                     }
                     // Check for +CMGL: OR specific commands directly.
                     // This handles cases where the header might be lost due to buffer overflow.
-                    if (strstr(sms_buffer, "+CMGL:") || strstr(sms_buffer, "#mqtt#") || strstr(sms_buffer, "#dht:"))
+                    if (strstr(sms_buffer, "+CMGL:") || strstr(sms_buffer, "#mqtt#") || strstr(sms_buffer, "#dht:") || strstr(sms_buffer, "#status#"))
                     {
-                        handle_sms_content(dce, sms_buffer);
+                        handle_sms_content(dce, sms_buffer, readings);
                         // Delete all messages to prevent repeated processing
                         // We delete all messages to ensure the inbox is clean for the next command
                         ESP_LOGI(TAG, "Deleting processed SMS...");
@@ -523,7 +586,7 @@ esp_err_t gsm_module_send_alert(const char *message)
 esp_err_t gsm_module_send_sms(const char *message)
 {
 #ifdef CONFIG_CONNECTION_TYPE_GSM
-    return send_sms(dce, CONFIG_TARGET_PHONE_NUMBER, message);
+    return send_sms(dce, target_phone_number, message);
 #else
     return ESP_OK;
 #endif

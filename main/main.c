@@ -11,12 +11,14 @@
 
 static const char *TAG = "MAIN";
 
+static sensor_readings_t readings = {0};
+
 #ifdef CONFIG_CONNECTION_TYPE_GSM
 void gsm_processing_task(void *pvParameters)
 {
     while (1)
     {
-        gsm_module_process_data(&temp_threshold, &hum_threshold);
+        gsm_module_process_data(&temp_threshold, &hum_threshold, &readings);
     }
 }
 #endif
@@ -72,9 +74,6 @@ void app_main(void)
 
     xTaskCreate(gsm_processing_task, "gsm_task", 4096, NULL, 5, NULL);
 #endif
-
-    // variable for Sensors reading
-    sensor_readings_t readings = {0};
 
     uint32_t last_mqtt_send_time = 0;
     bool s_is_alert_state = false;
