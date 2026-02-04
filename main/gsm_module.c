@@ -263,10 +263,10 @@ esp_err_t gsm_module_init()
         nvs_close(my_handle);
     }
 
-    #ifdef CONFIG_ENABLE_MQTT
+#ifdef CONFIG_ENABLE_MQTT
     // 2. Register IP Event Handlers to detect when 4G connects
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &on_ip_event, NULL));
-    #endif
+#endif
 
     // 3. Configure Modem DTE (UART Interface)
     esp_modem_dte_config_t dte_config = ESP_MODEM_DTE_DEFAULT_CONFIG();
@@ -339,6 +339,11 @@ esp_err_t gsm_module_init()
 
     // Disable command echo to prevent parsing errors
     esp_modem_at(dce, "ATE0", NULL, 1000);
+    ESP_LOGI(TAG, "Clearing SMS inbox before polling...");
+    // Once when entering SMS mode
+    esp_modem_at(dce, "AT+CMGF=1", NULL, 1000);
+    esp_modem_at(dce, "AT+CPMS=\"SM\",\"SM\",\"SM\"", NULL, 1000);
+    esp_modem_at(dce, "AT+CMGD=1,4", NULL, 5000);
 
     return 1;
 #else
@@ -454,28 +459,10 @@ void gsm_module_process_data(float *temp_threshold, float *hum_threshold, const 
                     {
                         handle_sms_content(dce, sms_buffer, readings);
 
-                        // Wait for modem to stabilize after processing (sending SMS takes time)
-                        vTaskDelay(pdMS_TO_TICKS(2000));
-
                         // Delete all messages to prevent repeated processing
                         // We delete all messages to ensure the inbox is clean for the next command
                         ESP_LOGI(TAG, "Deleting processed SMS...");
-                        bool deleted = false;
-                        for (int i = 0; i < 3; i++)
-                        {
-                            if (esp_modem_at(dce, "AT+CMGD=1,4", NULL, 5000) == ESP_OK)
-                            {
-                                ESP_LOGI(TAG, "SMS deleted successfully.");
-                                deleted = true;
-                                break;
-                            }
-                            ESP_LOGW(TAG, "Delete failed, retrying (%d/3)...", i + 1);
-                            vTaskDelay(pdMS_TO_TICKS(1000));
-                        }
-                        if (!deleted)
-                        {
-                            ESP_LOGE(TAG, "Failed to delete SMS. Inbox may be full.");
-                        }
+                        esp_modem_at(dce, "AT+CMGD=1,4", NULL, 5000);
                     }
                 }
                 vTaskDelay(pdMS_TO_TICKS(5000));
@@ -550,9 +537,9 @@ esp_err_t gsm_module_mqtt_publish(const sensor_readings_t *readings)
     if (s_ppp_connected && mqtt_client)
     {
         char payload[128];
-  snprintf(payload, sizeof(payload),
-           "{\"dht_temp\": %.2f, \"dht_hum\": %.2f, \"ds_temp\": %.2f}",
-           readings->dht_temp, readings->dht_humidity, readings->ds_temp);
+        snprintf(payload, sizeof(payload),
+                 "{\"dht_temp\": %.2f, \"dht_hum\": %.2f, \"ds_temp\": %.2f}",
+                 readings->dht_temp, readings->dht_humidity, readings->ds_temp);
 
         int msg_id = esp_mqtt_client_publish(mqtt_client, mqtt_pub_topic, payload, 0, 1, 0);
         ESP_LOGI(TAG, "GSM MQTT Sent: %s, ID: %d", payload, msg_id);
