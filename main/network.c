@@ -89,7 +89,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                             nvs_commit(my_handle);
                             nvs_close(my_handle);
                         }
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+                        snprintf(reply_msg, sizeof(reply_msg), "ফোন নম্বর আপডেট: %s", target_phone_number);
+#else
                         snprintf(reply_msg, sizeof(reply_msg), "Phone updated: %s", target_phone_number);
+#endif
                         config_changed = true;
                     }
                 }
@@ -104,15 +108,27 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                     temp_thresh_cfg.op = THRESH_RANGE_IN;
                     temp_thresh_cfg.val1 = v1;
                     temp_thresh_cfg.val2 = v2;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+                    snprintf(reply_msg, sizeof(reply_msg), "তাপমাত্রা কনফিগ: রেঞ্জ %.1f থেকে %.1f", v1, v2);
+#else
                     snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: Range %.1f to %.1f", v1, v2);
+#endif
                 } else if (sscanf(temp_cmd, "#temp:GT,%f#", &v1) == 1) {
                     temp_thresh_cfg.op = THRESH_GT;
                     temp_thresh_cfg.val1 = v1;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+                    snprintf(reply_msg, sizeof(reply_msg), "তাপমাত্রা কনফিগ: > %.1f", v1);
+#else
                     snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: > %.1f", v1);
+#endif
                 } else if (sscanf(temp_cmd, "#temp:LT,%f#", &v1) == 1) {
                     temp_thresh_cfg.op = THRESH_LT;
                     temp_thresh_cfg.val1 = v1;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+                    snprintf(reply_msg, sizeof(reply_msg), "তাপমাত্রা কনফিগ: < %.1f", v1);
+#else
                     snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: < %.1f", v1);
+#endif
                 }
 
                 // Save to NVS
@@ -135,15 +151,27 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base,
                     hum_thresh_cfg.op = THRESH_RANGE_IN;
                     hum_thresh_cfg.val1 = v1;
                     hum_thresh_cfg.val2 = v2;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+                    snprintf(reply_msg, sizeof(reply_msg), "আর্দ্রতা কনফিগ: রেঞ্জ %.1f থেকে %.1f", v1, v2);
+#else
                     snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: Range %.1f to %.1f", v1, v2);
+#endif
                 } else if (sscanf(hum_cmd, "#hum:GT,%f#", &v1) == 1) {
                     hum_thresh_cfg.op = THRESH_GT;
                     hum_thresh_cfg.val1 = v1;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+                    snprintf(reply_msg, sizeof(reply_msg), "আর্দ্রতা কনফিগ: > %.1f", v1);
+#else
                     snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: > %.1f", v1);
+#endif
                 } else if (sscanf(hum_cmd, "#hum:LT,%f#", &v1) == 1) {
                     hum_thresh_cfg.op = THRESH_LT;
                     hum_thresh_cfg.val1 = v1;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+                    snprintf(reply_msg, sizeof(reply_msg), "আর্দ্রতা কনফিগ: < %.1f", v1);
+#else
                     snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: < %.1f", v1);
+#endif
                 }
 
                 // Save to NVS

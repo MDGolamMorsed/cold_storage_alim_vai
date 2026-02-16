@@ -39,6 +39,7 @@ static volatile app_mode_t s_current_mode = MODE_MQTT;
 #else
 static volatile app_mode_t s_current_mode = MODE_SMS;
 #endif
+static volatile bool s_is_sending_sms = false;
 
 #ifdef CONFIG_ENABLE_MQTT
 
@@ -281,14 +282,23 @@ static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const 
     }
     ESP_LOGI(TAG, "Attempting to send SMS to %s", phone_number);
 
+    // Simple lock to prevent concurrency issues
+    int retry_lock = 0;
+    while (s_is_sending_sms && retry_lock < 50) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        retry_lock++;
+    }
+    s_is_sending_sms = true;
+
 #ifdef CONFIG_SMS_LANGUAGE_BANGLA
     // Configure modem for UCS2 (Universal Character Set)
     esp_modem_at(dce, "AT+CSCS=\"UCS2\"", NULL, 1000);
     esp_modem_at(dce, "AT+CSMP=17,167,0,8", NULL, 1000); // DCS=8 for Unicode
+    vTaskDelay(pdMS_TO_TICKS(200));
 
-    char phone_hex[64] = {0};
+    char phone_hex[128] = {0};
     utf8_to_ucs2_hex(phone_number, phone_hex);
-
+    
     // Allocate buffer for message hex (4 chars per UCS2 char + null terminator)
     // UTF-8 length is safe upper bound for character count, but let's be generous
     char *msg_hex = malloc(strlen(message) * 4 + 1);
@@ -298,7 +308,13 @@ static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const 
     {
         utf8_to_ucs2_hex(message, msg_hex);
         ESP_LOGI(TAG, "Sending Bangla SMS (UCS2 Hex): %s", msg_hex);
+        ESP_LOGI(TAG, "Target Phone (Hex): %s", phone_hex);
         err = esp_modem_send_sms(dce, phone_hex, msg_hex);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Bangla SMS Failed: %s", esp_err_to_name(err));
+        } else {
+            ESP_LOGI(TAG, "Bangla SMS Sent Successfully");
+        }
         free(msg_hex);
     }
     else
@@ -322,6 +338,7 @@ static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const 
         ESP_LOGI(TAG, "SMS sent successfully.");
     }
 #endif
+    s_is_sending_sms = false;
     return err;
 }
 
@@ -329,7 +346,7 @@ static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const 
 #if defined(CONFIG_CONNECTION_TYPE_GSM) && defined(CONFIG_SMS_ENABLE)
 static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const sensor_readings_t *readings, threshold_config_t *temp_cfg, threshold_config_t *hum_cfg)
 {
-    char reply_msg[128] = {0};
+    char reply_msg[256] = {0};
 
     // Check for mode switch command #mqtt#
     if (strstr(sms_text, "#mqtt#"))
@@ -343,9 +360,9 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const
     if (strstr(sms_text, "#status#"))
     {
         ESP_LOGI(TAG, "Command received: Sending Status Report");
-        char status_msg[128];
+        char status_msg[256];
 #ifdef CONFIG_SMS_LANGUAGE_BANGLA
-        snprintf(status_msg, sizeof(status_msg), "অবস্থা: তাপমাত্রা: %.2fC, আর্দ্রতা: %.2f%%, DS: %.2fC",
+        snprintf(status_msg, sizeof(status_msg), "অবস্থা: তাপ:%.1fC, আর্দ্রতা:%.1f%%, ডিএস:%.1fC",
                  readings->dht_temp, readings->dht_humidity, readings->ds_temp);
 #else
         snprintf(status_msg, sizeof(status_msg), "Status: Temp: %.2fC, Hum: %.2f%%, DS: %.2fC",
@@ -703,6 +720,12 @@ void gsm_module_process_data(threshold_config_t *temp_cfg, threshold_config_t *h
             // Polling loop: Stay in SMS mode until flag changes
             while (s_current_mode == MODE_SMS)
             {
+                // Pause polling if an SMS is being sent to avoid AT command conflicts
+                if (s_is_sending_sms)
+                {
+                    vTaskDelay(pdMS_TO_TICKS(500));
+                    continue;
+                }
                 memset(sms_buffer, 0, 4096);
                 // Use "ALL" because "REC UNREAD" changes status to READ immediately.
                 // If the ESP32 misses the response once, it won't see it again.

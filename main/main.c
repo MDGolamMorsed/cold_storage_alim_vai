@@ -143,9 +143,9 @@ void app_main(void)
             get_threshold_str(t_str, sizeof(t_str), &temp_thresh_cfg);
             get_threshold_str(h_str, sizeof(h_str), &hum_thresh_cfg);
 
-            char msg[128];
+            char msg[512];
 #ifdef CONFIG_SMS_LANGUAGE_BANGLA
-            snprintf(msg, sizeof(msg), "সতর্কতা: তাপমাত্রা %.2f C (সীমা %s), আর্দ্রতা %.2f %% (সীমা %s)",
+            snprintf(msg, sizeof(msg), "সতর্কতা! তাপ:%.1f(সীমা:%s) আর্দ্রতা:%.1f(সীমা:%s)",
                      readings.dht_temp, t_str, readings.dht_humidity, h_str);
 #else
             snprintf(msg, sizeof(msg), "ALERT: Temp %.2f C (Limit %s), Hum %.2f %% (Limit %s)",
@@ -169,9 +169,9 @@ void app_main(void)
             get_threshold_str(t_str, sizeof(t_str), &temp_thresh_cfg);
             get_threshold_str(h_str, sizeof(h_str), &hum_thresh_cfg);
 
-            char msg[128];
+            char msg[512];
 #ifdef CONFIG_SMS_LANGUAGE_BANGLA
-            snprintf(msg, sizeof(msg), "স্বাভাবিক: তাপমাত্রা %.2f C (সীমা %s), আর্দ্রতা %.2f %% (সীমা %s)",
+            snprintf(msg, sizeof(msg), "স্বাভাবিক! তাপ:%.1f(সীমা:%s) আর্দ্রতা:%.1f(সীমা:%s)",
                      readings.dht_temp, t_str, readings.dht_humidity, h_str);
 #else
             snprintf(msg, sizeof(msg), "NORMAL: Temp %.2f C (Limit %s), Hum %.2f %% (Limit %s)",
