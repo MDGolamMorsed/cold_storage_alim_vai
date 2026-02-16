@@ -240,6 +240,38 @@ static void on_ip_event(void *arg, esp_event_base_t event_base, int32_t event_id
 #endif
 
 // --- SMS Sending Function ---
+// Helper to convert UTF-8 string to UCS2 Hex string
+static void utf8_to_ucs2_hex(const char *utf8, char *hex_out)
+{
+    while (*utf8)
+    {
+        uint16_t unicode = 0;
+        if ((*utf8 & 0x80) == 0)
+        {
+            unicode = *utf8++;
+        }
+        else if ((*utf8 & 0xE0) == 0xC0)
+        {
+            unicode = (*utf8++ & 0x1F) << 6;
+            unicode |= (*utf8++ & 0x3F);
+        }
+        else if ((*utf8 & 0xF0) == 0xE0)
+        {
+            unicode = (*utf8++ & 0x0F) << 12;
+            unicode |= (*utf8++ & 0x3F) << 6;
+            unicode |= (*utf8++ & 0x3F);
+        }
+        else
+        {
+            utf8++; // Skip unsupported
+            continue;
+        }
+        sprintf(hex_out, "%04X", unicode);
+        hex_out += 4;
+    }
+    *hex_out = '\0';
+}
+
 static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const char *message)
 {
     if (!dce || !phone_number || !message || strlen(phone_number) == 0)
@@ -249,6 +281,35 @@ static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const 
     }
     ESP_LOGI(TAG, "Attempting to send SMS to %s", phone_number);
 
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+    // Configure modem for UCS2 (Universal Character Set)
+    esp_modem_at(dce, "AT+CSCS=\"UCS2\"", NULL, 1000);
+    esp_modem_at(dce, "AT+CSMP=17,167,0,8", NULL, 1000); // DCS=8 for Unicode
+
+    char phone_hex[64] = {0};
+    utf8_to_ucs2_hex(phone_number, phone_hex);
+
+    // Allocate buffer for message hex (4 chars per UCS2 char + null terminator)
+    // UTF-8 length is safe upper bound for character count, but let's be generous
+    char *msg_hex = malloc(strlen(message) * 4 + 1);
+    esp_err_t err = ESP_FAIL;
+
+    if (msg_hex)
+    {
+        utf8_to_ucs2_hex(message, msg_hex);
+        ESP_LOGI(TAG, "Sending Bangla SMS (UCS2 Hex): %s", msg_hex);
+        err = esp_modem_send_sms(dce, phone_hex, msg_hex);
+        free(msg_hex);
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Failed to allocate memory for SMS conversion");
+    }
+
+    // Restore GSM/ASCII mode for normal operation
+    esp_modem_at(dce, "AT+CSCS=\"GSM\"", NULL, 1000);
+    esp_modem_at(dce, "AT+CSMP=17,167,0,0", NULL, 1000);
+#else
     // Use the public API function to send SMS.
     // This is more robust and abstracts away the low-level AT command sequence.
     esp_err_t err = esp_modem_send_sms(dce, phone_number, message);
@@ -260,6 +321,7 @@ static esp_err_t send_sms(esp_modem_dce_t *dce, const char *phone_number, const 
     {
         ESP_LOGI(TAG, "SMS sent successfully.");
     }
+#endif
     return err;
 }
 
@@ -282,8 +344,13 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const
     {
         ESP_LOGI(TAG, "Command received: Sending Status Report");
         char status_msg[128];
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+        snprintf(status_msg, sizeof(status_msg), "অবস্থা: তাপমাত্রা: %.2fC, আর্দ্রতা: %.2f%%, DS: %.2fC",
+                 readings->dht_temp, readings->dht_humidity, readings->ds_temp);
+#else
         snprintf(status_msg, sizeof(status_msg), "Status: Temp: %.2fC, Hum: %.2f%%, DS: %.2fC",
                  readings->dht_temp, readings->dht_humidity, readings->ds_temp);
+#endif
 
         if (strlen(target_phone_number) > 0)
         {
@@ -315,7 +382,11 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const
                     nvs_close(my_handle);
                 }
 
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+                send_sms(dce, target_phone_number, "সফল: ফোন নম্বর আপডেট করা হয়েছে।");
+#else
                 send_sms(dce, target_phone_number, "Success: Target phone number updated.");
+#endif
                 return;
             }
         }
@@ -332,19 +403,31 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const
             temp_cfg->op = THRESH_RANGE_IN;
             temp_cfg->val1 = v1;
             temp_cfg->val2 = v2;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+            snprintf(reply_msg, sizeof(reply_msg), "তাপমাত্রা কনফিগ: রেঞ্জ %.1f থেকে %.1f", v1, v2);
+#else
             snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: Range %.1f to %.1f", v1, v2);
+#endif
         }
         else if (sscanf(temp_cmd, "#temp:GT,%f#", &v1) == 1)
         {
             temp_cfg->op = THRESH_GT;
             temp_cfg->val1 = v1;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+            snprintf(reply_msg, sizeof(reply_msg), "তাপমাত্রা কনফিগ: > %.1f", v1);
+#else
             snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: > %.1f", v1);
+#endif
         }
         else if (sscanf(temp_cmd, "#temp:LT,%f#", &v1) == 1)
         {
             temp_cfg->op = THRESH_LT;
             temp_cfg->val1 = v1;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+            snprintf(reply_msg, sizeof(reply_msg), "তাপমাত্রা কনফিগ: < %.1f", v1);
+#else
             snprintf(reply_msg, sizeof(reply_msg), "Temp Config Set: < %.1f", v1);
+#endif
         }
 
         // Save to NVS
@@ -368,19 +451,31 @@ static void handle_sms_content(esp_modem_dce_t *dce, const char *sms_text, const
             hum_cfg->op = THRESH_RANGE_IN;
             hum_cfg->val1 = v1;
             hum_cfg->val2 = v2;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+            snprintf(reply_msg, sizeof(reply_msg), "আর্দ্রতা কনফিগ: রেঞ্জ %.1f থেকে %.1f", v1, v2);
+#else
             snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: Range %.1f to %.1f", v1, v2);
+#endif
         }
         else if (sscanf(hum_cmd, "#hum:GT,%f#", &v1) == 1)
         {
             hum_cfg->op = THRESH_GT;
             hum_cfg->val1 = v1;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+            snprintf(reply_msg, sizeof(reply_msg), "আর্দ্রতা কনফিগ: > %.1f", v1);
+#else
             snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: > %.1f", v1);
+#endif
         }
         else if (sscanf(hum_cmd, "#hum:LT,%f#", &v1) == 1)
         {
             hum_cfg->op = THRESH_LT;
             hum_cfg->val1 = v1;
+#ifdef CONFIG_SMS_LANGUAGE_BANGLA
+            snprintf(reply_msg, sizeof(reply_msg), "আর্দ্রতা কনফিগ: < %.1f", v1);
+#else
             snprintf(reply_msg, sizeof(reply_msg), "Hum Config Set: < %.1f", v1);
+#endif
         }
 
         // Save to NVS

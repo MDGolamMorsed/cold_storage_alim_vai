@@ -148,6 +148,18 @@ menu "Cold Storage Configuration"
                 help
                     Placeholder to enable SMS functionality in the future.
 
+            choice SMS_LANGUAGE
+                prompt "SMS Language"
+                default SMS_LANGUAGE_ENGLISH
+                help
+                    Select the language for SMS responses.
+
+                config SMS_LANGUAGE_ENGLISH
+                    bool "English"
+                config SMS_LANGUAGE_BANGLA
+                    bool "Bangla"
+            endchoice
+
             config TARGET_PHONE_NUMBER
                 string "Target Phone Number"
                 default "+8801521475412"
