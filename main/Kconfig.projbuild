@@ -34,13 +34,13 @@ menu "Cold Storage Configuration"
         menu "GSM module Configuration"
             config SIM7670_TX_PIN
                 int "Modem TX Pin (ESP RX)"
-                default 16
+                default 1
                 help
                     GPIO pin on ESP32 connected to the modem's RX pin.
 
             config SIM7670_RX_PIN
                 int "Modem RX Pin (ESP TX)"
-                default 17
+                default 2
                 help
                     GPIO pin on ESP32 connected to the modem's TX pin.
 

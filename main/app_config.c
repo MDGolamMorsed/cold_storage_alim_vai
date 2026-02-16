@@ -6,9 +6,9 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
-threshold_config_t temp_thresh_cfg = { .op = THRESH_GT, .val1 = 30.0f, .val2 = 0.0f };
-threshold_config_t hum_thresh_cfg = { .op = THRESH_GT, .val1 = 70.0f, .val2 = 0.0f };
-uint32_t mqtt_send_interval_ms = 6000; // Default 60 seconds
+threshold_config_t temp_thresh_cfg = {.op = THRESH_GT, .val1 = 30.0f, .val2 = 0.0f};
+threshold_config_t hum_thresh_cfg = {.op = THRESH_GT, .val1 = 70.0f, .val2 = 0.0f};
+uint32_t mqtt_send_interval_ms = 60000; // Default 60 seconds
 
 #ifndef CONFIG_TARGET_PHONE_NUMBER
 #define CONFIG_TARGET_PHONE_NUMBER ""
